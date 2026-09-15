@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   fix:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'feat: refresh feed from Home and show new post badge') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
