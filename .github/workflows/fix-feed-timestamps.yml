@@ -1,0 +1,68 @@
+name: Fix Feed Timestamps
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Persist post creation timestamps
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('artifacts/yuniko-app/src/App.tsx')
+          text = path.read_text()
+
+          old_type = '''  views: number;\n  location?: string;\n};'''
+          new_type = '''  views: number;\n  createdAt: number;\n  location?: string;\n};'''
+          if old_type in text and '  createdAt: number;\n  location?: string;\n};' not in text:
+              text = text.replace(old_type, new_type, 1)
+
+          replacements = {
+              'views: 8400, location: "Seoul, South Korea"': 'views: 8400, createdAt: Date.now() - 3 * 60 * 60 * 1000, location: "Seoul, South Korea"',
+              'views: 5200 },': 'views: 5200, createdAt: Date.now() - 8 * 60 * 60 * 1000 },',
+              'views: 3100, location: "Lisbon, Portugal"': 'views: 3100, createdAt: Date.now() - 14 * 60 * 60 * 1000, location: "Lisbon, Portugal"',
+          }
+          for old, new in replacements.items():
+              if old in text and new not in text:
+                  text = text.replace(old, new, 1)
+
+          old_add = '''shares: 0, views: 0, location: input.location || undefined'''
+          new_add = '''shares: 0, views: 0, createdAt: Date.now(), location: input.location || undefined'''
+          if old_add in text:
+              text = text.replace(old_add, new_add, 1)
+
+          old_rank = '''createdAt: post.id.startsWith("p-") ? Number(post.id.slice(2)) || Date.now() : Date.now() - index * 2 * 60 * 60 * 1000,'''
+          new_rank = '''createdAt: post.createdAt,'''
+          if old_rank in text:
+              text = text.replace(old_rank, new_rank, 1)
+
+          path.write_text(text)
+          print('Feed post timestamps are now persistent.')
+
+      - name: Build Yuniko
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/yuniko-app run build
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/yuniko-app/src/App.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: persist post creation timestamps for feed ranking"
+          git push
