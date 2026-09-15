@@ -1,6 +1,7 @@
 name: Integrate Feed Algorithm
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -19,117 +20,35 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('artifacts/yuniko-app/src/App.tsx')
           text = path.read_text()
 
-          if 'from "./feedAlgorithm"' in text:
-              print('Feed algorithm is already integrated; nothing to do.')
-              raise SystemExit(0)
+          if 'import { rankFeedPosts } from "./feedAlgorithm";' not in text:
+              text = text.replace('import "./index.css";\n', 'import "./index.css";\nimport { rankFeedPosts } from "./feedAlgorithm";\n', 1)
 
-          text = text.replace(
-              'import "./index.css";\n',
-              'import "./index.css";\nimport { rankFeedPosts } from "./feedAlgorithm";\n',
-              1,
-          )
+          if 'const rankedPosts = useMemo(() =>' not in text:
+              marker = '  const [online, setOnline] = useState(navigator.onLine);\n'
+              if marker not in text:
+                  raise SystemExit('Home online-state marker not found; aborting without changes.')
+              logic = '''  const [feedCycle, setFeedCycle] = useState(0);\n\n  useEffect(() => {\n    setFeedCycle((cycle) => cycle + 1);\n  }, []);\n\n  const rankedPosts = useMemo(() => {\n    const historyKey = "yuniko-feed-history";\n    let recentlySeenPostIds: string[] = [];\n    try {\n      recentlySeenPostIds = JSON.parse(localStorage.getItem(historyKey) || "[]");\n    } catch {\n      recentlySeenPostIds = [];\n    }\n\n    const recentlySeenUserIds = state.posts\n      .filter((post) => recentlySeenPostIds.includes(post.id))\n      .map((post) => post.user.id);\n\n    const followedUserIds = state.following;\n    const interests: Record<string, number> = {};\n    state.posts.forEach((post) => {\n      post.hashtags.forEach((tag) => {\n        const key = tag.replace(/^#/, "").toLowerCase();\n        interests[key] = Math.max(interests[key] || 0, followedUserIds.includes(post.user.id) ? 1 : 0.25);\n      });\n    });\n\n    const ranked = rankFeedPosts(\n      state.posts.map((post, index) => ({\n        id: post.id,\n        userId: post.user.id,\n        hashtags: post.hashtags,\n        likes: post.likes + (state.liked.includes(post.id) ? 1 : 0),\n        comments: Math.max(post.comments, state.comments[post.id]?.length || 0),\n        shares: post.shares,\n        saves: state.saved.includes(post.id) ? 1 : 0,\n        views: post.views,\n        createdAt: post.id.startsWith("p-") ? Number(post.id.slice(2)) || Date.now() : Date.now() - index * 2 * 60 * 60 * 1000,\n      })),\n      {\n        followedUserIds,\n        interests,\n        recentlySeenPostIds,\n        recentlySeenUserIds,\n        notInterestedPostIds: [],\n        notInterestedUserIds: state.blocked,\n      },\n      { maxPostsPerUser: 2 },\n    );\n\n    const ordered = ranked\n      .map((rankedPost) => state.posts.find((post) => post.id === rankedPost.id))\n      .filter(Boolean) as typeof state.posts;\n\n    if (ordered.length) {\n      const nextHistory = [...new Set([...ordered.slice(0, 4).map((post) => post.id), ...recentlySeenPostIds])].slice(0, 12);\n      try {\n        localStorage.setItem(historyKey, JSON.stringify(nextHistory));\n      } catch {\n        // Ignore storage failures; the feed still works in memory.\n      }\n    }\n\n    return ordered;\n  }, [state.posts, state.following, state.liked, state.saved, state.comments, state.blocked, feedCycle]);\n'''
+              text = text.replace(marker, marker + logic, 1)
 
-          old_home = '''function Home() {
-  const [, navigate] = useLocation();
-  const { state } = useDemo();
-  const [worldMenu, setWorldMenu] = useState(false);
-  const [online, setOnline] = useState(navigator.onLine);
-  useEffect(() => { const on = () => setOnline(true); const off = () => setOnline(false); window.addEventListener("online", on); window.addEventListener("offline", off); return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); }; }, []);
-  return <PageShell><div className="relative w-full min-h-screen bg-[#0d0b14] overflow-hidden"><header className="absolute inset-x-0 top-0 z-50 h-14 flex items-center justify-between gap-2 px-3 min-[360px]:px-4 glass border-b border-pink-400/10"><button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="text-2xl font-black gradient-text">Yuniko</button><button onClick={() => setWorldMenu(!worldMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/[.06] border border-pink-400/30 text-white/90 text-xs min-[360px]:text-sm"><Globe size={12} />World Feed<ChevronDown size={11} /></button><div className="flex items-center gap-3"><button aria-label="Search" onClick={() => navigate("/search")}><SearchIcon size={20} className="text-white/75" /></button><button aria-label="Add friends" onClick={() => navigate("/add-friends")}><UserPlus size={20} className="text-white/75" /></button></div></header><StoryStrip />{worldMenu && <><button className="fixed inset-0 z-40 cursor-default" onClick={() => setWorldMenu(false)} aria-label="Close menu" /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="absolute top-[60px] left-1/2 -translate-x-1/2 w-44 rounded-2xl z-50 overflow-hidden bg-[#120e1e] border border-pink-400/25"><button onClick={() => setWorldMenu(false)} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Globe size={13} />World Feed</button><button onClick={() => { setWorldMenu(false); navigate("/search?tag=nightwalk"); }} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Hash size={13} />Trending tags</button></motion.div></>}{!online && <div className="absolute inset-x-0 top-[134px] z-40 flex items-center justify-center gap-1.5 py-1.5 bg-red-500/85"><WifiOff size={12} /><span className="text-xs">Offline mode</span></div>}<div className="absolute inset-x-0 top-[134px] bottom-[64px] overflow-y-scroll snap-y snap-mandatory no-scrollbar" data-testid="posts-feed">{state.posts.map((post) => <div key={post.id} className="relative w-full max-w-[920px] mx-auto px-2 py-1 snap-start snap-always" style={{ height: "calc(100dvh - 198px)", minHeight: 480 }}><div className="relative w-full h-full rounded-2xl overflow-hidden"><PostCard post={post} /></div></div>)}</div></div></PageShell>;
-}'''
+          if '{state.posts.map((post) =>' in text:
+              text = text.replace('{state.posts.map((post) =>', '{rankedPosts.map((post) =>', 1)
+          elif '{rankedPosts.map((post) =>' not in text:
+              raise SystemExit('Feed posts render marker not found; aborting without changes.')
 
-          new_home = '''function Home() {
-  const [, navigate] = useLocation();
-  const { state, activeUser } = useDemo();
-  const [worldMenu, setWorldMenu] = useState(false);
-  const [online, setOnline] = useState(navigator.onLine);
-  const [feedCycle, setFeedCycle] = useState(0);
-
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
-
-  // A new Home visit starts a new recommendation cycle. Staying on Feed does not auto-refresh it.
-  useEffect(() => {
-    setFeedCycle((cycle) => cycle + 1);
-  }, []);
-
-  const rankedPosts = useMemo(() => {
-    const historyKey = "yuniko-feed-history";
-    let recentlySeenPostIds: string[] = [];
-    try {
-      recentlySeenPostIds = JSON.parse(localStorage.getItem(historyKey) || "[]");
-    } catch {
-      recentlySeenPostIds = [];
-    }
-
-    const recentlySeenUserIds = state.posts
-      .filter((post) => recentlySeenPostIds.includes(post.id))
-      .map((post) => post.user.id);
-
-    const followedUserIds = state.following;
-    const interests: Record<string, number> = {};
-    state.posts.forEach((post) => {
-      post.hashtags.forEach((tag) => {
-        const key = tag.replace(/^#/, "").toLowerCase();
-        interests[key] = Math.max(interests[key] || 0, followedUserIds.includes(post.user.id) ? 1 : 0.25);
-      });
-    });
-
-    const ranked = rankFeedPosts(
-      state.posts.map((post) => ({
-        id: post.id,
-        userId: post.user.id,
-        hashtags: post.hashtags,
-        likes: post.likes + (state.liked.includes(post.id) ? 1 : 0),
-        comments: Math.max(post.comments, state.comments[post.id]?.length || 0),
-        shares: post.shares,
-        saves: state.saved.includes(post.id) ? (post.id ? 1 : 0) : 0,
-        views: post.views,
-        createdAt: post.id.startsWith("p-") ? Number(post.id.slice(2)) || Date.now() : Date.now() - 2 * 60 * 60 * 1000,
-      })),
-      {
-        followedUserIds,
-        interests,
-        recentlySeenPostIds,
-        recentlySeenUserIds,
-        notInterestedPostIds: [],
-        notInterestedUserIds: state.blocked,
-      },
-      { maxPostsPerUser: 2 },
-    );
-
-    const ordered = ranked.map((rankedPost) => state.posts.find((post) => post.id === rankedPost.id)).filter(Boolean) as typeof state.posts;
-
-    // Keep a short local history so repeated posts/creators are naturally deprioritized on the next Home visit.
-    if (ordered.length) {
-      const nextHistory = [...new Set([...ordered.slice(0, 4).map((post) => post.id), ...recentlySeenPostIds])].slice(0, 12);
-      try { localStorage.setItem(historyKey, JSON.stringify(nextHistory)); } catch { /* localStorage may be unavailable */ }
-    }
-
-    return ordered;
-  }, [state.posts, state.following, state.liked, state.saved, state.comments, state.blocked, feedCycle]);
-
-  return <PageShell><div className="relative w-full min-h-screen bg-[#0d0b14] overflow-hidden"><header className="absolute inset-x-0 top-0 z-50 h-14 flex items-center justify-between gap-2 px-3 min-[360px]:px-4 glass border-b border-pink-400/10"><button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="text-2xl font-black gradient-text">Yuniko</button><button onClick={() => setWorldMenu(!worldMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/[.06] border border-pink-400/30 text-white/90 text-xs min-[360px]:text-sm"><Globe size={12} />World Feed<ChevronDown size={11} /></button><div className="flex items-center gap-3"><button aria-label="Search" onClick={() => navigate("/search")}><SearchIcon size={20} className="text-white/75" /></button><button aria-label="Add friends" onClick={() => navigate("/add-friends")}><UserPlus size={20} className="text-white/75" /></button></div></header><StoryStrip />{worldMenu && <><button className="fixed inset-0 z-40 cursor-default" onClick={() => setWorldMenu(false)} aria-label="Close menu" /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="absolute top-[60px] left-1/2 -translate-x-1/2 w-44 rounded-2xl z-50 overflow-hidden bg-[#120e1e] border border-pink-400/25"><button onClick={() => setWorldMenu(false)} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Globe size={13} />World Feed</button><button onClick={() => { setWorldMenu(false); navigate("/search?tag=nightwalk"); }} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Hash size={13} />Trending tags</button></motion.div></>}{!online && <div className="absolute inset-x-0 top-[134px] z-40 flex items-center justify-center gap-1.5 py-1.5 bg-red-500/85"><WifiOff size={12} /><span className="text-xs">Offline mode</span></div>}<div className="absolute inset-x-0 top-[134px] bottom-[64px] overflow-y-scroll snap-y snap-mandatory no-scrollbar" data-testid="posts-feed">{rankedPosts.map((post) => <div key={post.id} className="relative w-full max-w-[920px] mx-auto px-2 py-1 snap-start snap-always" style={{ height: "calc(100dvh - 198px)", minHeight: 480 }}><div className="relative w-full h-full rounded-2xl overflow-hidden"><PostCard post={post} /></div></div>)}</div></div></PageShell>;
-}'''
-
-          if old_home not in text:
-              raise SystemExit('Expected Home block was not found; aborting without changes.')
-
-          text = text.replace(old_home, new_home, 1)
           path.write_text(text)
-          print('Feed ranking integrated into Home.')
+          print('Feed ranking is integrated into Home.')
+
+      - name: Build Yuniko
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/yuniko-app run build
 
       - name: Commit integration
         run: |
