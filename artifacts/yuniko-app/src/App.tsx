@@ -38,7 +38,6 @@ import {
   MessageCircle,
   MessageSquarePlus,
   MoreHorizontal,
-  Moon,
   Paperclip,
   Phone,
   Play,
@@ -49,7 +48,6 @@ import {
   Share2,
   Shield,
   Sparkles,
-  Sun,
   User,
   UserPlus,
   Users,
@@ -67,7 +65,6 @@ const IMG = {
   dj: "/scene-dj.jpg",
 };
 
-type Theme = "dark" | "light";
 type DemoUser = {
   id: string;
   username: string;
@@ -101,7 +98,6 @@ type DemoState = {
   messages: Record<string, string[]>;
   archived: string[];
   blocked: string[];
-  theme: Theme;
   privateProfile: boolean;
   messageRequests: boolean;
   twoFactor: boolean;
@@ -150,7 +146,6 @@ const defaultState: DemoState = {
   messages: { "1": ["That light is unreal.", "I know, right? It felt like the whole street was glowing."], "2": ["See you after soundcheck."], "3": ["Sent a photo"] },
   archived: [],
   blocked: [],
-  theme: "dark",
   privateProfile: false,
   messageRequests: true,
   twoFactor: false,
@@ -187,7 +182,9 @@ function loadState(): DemoState {
   try {
     const saved = localStorage.getItem("yuniko-demo-state");
     if (!saved) return defaultState;
-    return { ...defaultState, ...JSON.parse(saved), profile: { ...defaultState.profile, ...JSON.parse(saved).profile } };
+    const parsed = JSON.parse(saved);
+    delete parsed.theme;
+    return { ...defaultState, ...parsed, profile: { ...defaultState.profile, ...parsed.profile } };
   } catch {
     return defaultState;
   }
@@ -265,8 +262,7 @@ function NavButton({ path, label, icon: Icon, active, navigate }: { path: string
   return <button aria-label={label} onClick={() => navigate(path)} className="w-14 h-14 flex flex-col items-center justify-center gap-0.5 relative"><Icon size={22} style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.45)" }} strokeWidth={active ? 2.3 : 1.7} /><span className="text-[10px]" style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.38)" }}>{label}</span><span className="absolute bottom-0 w-1 h-1 rounded-full bg-pink-400" style={{ opacity: active ? 1 : 0 }} /></button>;
 }
 function PageShell({ children, nav = true, className = "" }: { children: ReactNode; nav?: boolean; className?: string }) {
-  const { state } = useDemo();
-  return <div className={`w-full min-h-screen ${state.theme === "light" ? "yuniko-light bg-[#f7f3fb] text-[#17121f]" : "bg-[#0d0b14] text-white"} ${nav ? "pb-20" : ""} ${className}`}>{children}{nav && <BottomNav />}</div>;
+  return <div className={`w-full min-h-screen bg-[#0d0b14] text-white ${nav ? "pb-20" : ""} ${className}`}>{children}{nav && <BottomNav />}</div>;
 }
 function TopBar({ title, back = true, action }: { title: string; back?: boolean; action?: ReactNode }) {
   const [, navigate] = useLocation();
@@ -405,10 +401,10 @@ function CallPage() {
 
 function Settings() {
   const [, navigate] = useLocation();
-  const { state, activeUser, updateState, showToast } = useDemo();
+  const { activeUser } = useDemo();
   const [logout, setLogout] = useState(false);
   const sections = [{ title: "Account", color: "#ff3d9a", items: [["Edit Profile", "/profile/edit", User], ["Username & Email", "/settings/account", User], ["Verify Account", "/account/verify", Check]] }, { title: "Privacy", color: "#b054ff", items: [["Privacy", "/settings/privacy", Eye], ["Blocked Users", "/blocked-users", Lock]] }, { title: "Security", color: "#ff6eb4", items: [["Two-factor authentication", "/settings/security", Shield], ["Active sessions", "/settings/security", Shield]] }, { title: "About", color: "#7eb9ff", items: [["Help Center", "/help", CircleHelp], ["Feedback", "/feedback", MessageCircle], ["App version 1.0.0", "/settings/about", Info]] }] as const;
-  return <PageShell><TopBar title="Settings" /><button onClick={() => navigate("/profile")} className="w-full flex items-center gap-3 px-4 py-4 border-b border-white/[.06] text-left"><Avatar user={activeUser} size="md" ring /><div className="flex-1"><p className="font-semibold">{activeUser.displayName}</p><p className="text-white/50 text-sm">@{activeUser.username}</p></div><ChevronRight size={18} className="text-white/30" /></button><div className="px-4 py-4 border-b border-white/[.06]"><p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">Appearance</p><div className="flex gap-3"><button onClick={() => updateState({ theme: "dark" })} className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl" style={{ background: state.theme === "dark" ? "rgba(255,0,110,.12)" : "rgba(255,255,255,.05)", border: state.theme === "dark" ? "1px solid rgba(255,0,110,.4)" : "1px solid rgba(255,255,255,.08)" }}><Moon size={16} className="text-pink-400" /><span className="text-sm">Dark mode</span></button><button onClick={() => { updateState({ theme: "light" }); showToast("Light mode enabled"); }} className="flex-1 flex items-center gap-2 px-3 py-3 rounded-xl" style={{ background: state.theme === "light" ? "rgba(255,0,110,.12)" : "rgba(255,255,255,.05)", border: state.theme === "light" ? "1px solid rgba(255,0,110,.4)" : "1px solid rgba(255,255,255,.08)" }}><Sun size={16} className="text-white/50" /><span className="text-sm text-white/60">Light mode</span></button></div></div>{sections.map((section) => <div key={section.title} className="px-4 py-4 border-b border-white/[.06]"><p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">{section.title}</p><div className="rounded-2xl overflow-hidden bg-white/[.03] border border-white/[.07]">{section.items.map(([label, href, Icon], index) => <button key={label} onClick={() => navigate(href)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left" style={{ borderBottom: index < section.items.length - 1 ? "1px solid rgba(255,255,255,.06)" : "none" }}><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${section.color}18` }}><Icon size={16} style={{ color: section.color }} /></span><span className="flex-1 text-white/80 text-sm">{label}</span><ChevronRight size={14} className="text-white/25" /></button>)}</div></div>)}<div className="px-4 py-4"><button onClick={() => setLogout(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-red-500/10 border border-red-500/20"><LogOut size={18} className="text-red-400" /><span className="text-red-400 font-medium text-sm">Log out</span></button></div>{logout && <ConfirmModal title="Log out?" body="You can come back anytime." onCancel={() => setLogout(false)} onConfirm={() => { localStorage.removeItem("yuniko-demo-auth"); navigate("/login"); }} />}</PageShell>;
+  return <PageShell><TopBar title="Settings" /><button onClick={() => navigate("/profile")} className="w-full flex items-center gap-3 px-4 py-4 border-b border-white/[.06] text-left"><Avatar user={activeUser} size="md" ring /><div className="flex-1"><p className="font-semibold">{activeUser.displayName}</p><p className="text-white/50 text-sm">@{activeUser.username}</p></div><ChevronRight size={18} className="text-white/30" /></button>{sections.map((section) => <div key={section.title} className="px-4 py-4 border-b border-white/[.06]"><p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">{section.title}</p><div className="rounded-2xl overflow-hidden bg-white/[.03] border border-white/[.07]">{section.items.map(([label, href, Icon], index) => <button key={label} onClick={() => navigate(href)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left" style={{ borderBottom: index < section.items.length - 1 ? "1px solid rgba(255,255,255,.06)" : "none" }}><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${section.color}18` }}><Icon size={16} style={{ color: section.color }} /></span><span className="flex-1 text-white/80 text-sm">{label}</span><ChevronRight size={14} className="text-white/25" /></button>)}</div></div>)}<div className="px-4 py-4"><button onClick={() => setLogout(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-red-500/10 border border-red-500/20"><LogOut size={18} className="text-red-400" /><span className="text-red-400 font-medium text-sm">Log out</span></button></div>{logout && <ConfirmModal title="Log out?" body="You can come back anytime." onCancel={() => setLogout(false)} onConfirm={() => { localStorage.removeItem("yuniko-demo-auth"); navigate("/login"); }} />}</PageShell>;
 }
 function ConfirmModal({ title, body, onCancel, onConfirm }: { title: string; body: string; onCancel: () => void; onConfirm: () => void }) { return <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6"><div className="w-full max-w-sm rounded-2xl overflow-hidden bg-[#120f1e] border border-white/10"><div className="p-6"><h3 className="font-bold text-lg mb-2">{title}</h3><p className="text-white/60 text-sm">{body}</p></div><div className="flex border-t border-white/10"><button onClick={onCancel} className="flex-1 py-4 text-white/60 border-r border-white/10">Cancel</button><button onClick={onConfirm} className="flex-1 py-4 text-red-400 font-semibold">Confirm</button></div></div></div>; }
 
