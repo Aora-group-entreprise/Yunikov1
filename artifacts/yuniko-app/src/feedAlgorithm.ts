@@ -36,12 +36,23 @@ export type RankedFeedPost = FeedPost & {
 
 export type DistributionStage = 3 | 5 | 7 | 999;
 
+export type DistributionState = {
+  testedCountries: string[];
+  currentStage: DistributionStage;
+  cycle: number;
+  impressions: number;
+  engagement: number;
+  lastTestAt: number | null;
+  nextAction: "test" | "expand" | "hold" | "second-chance" | "global";
+};
+
 export type DistributionDecision = {
   stage: DistributionStage;
   countries: string[];
   engagementRate: number;
   velocity: number;
   reason: "initial-test" | "expand" | "hold" | "second-chance" | "global";
+  state: DistributionState;
 };
 
 // These are Yuniko's initial simulation countries, not copied from another platform.
@@ -167,24 +178,74 @@ export function rankFeedPosts(
   return result.concat(deferred);
 }
 
+export function createDistributionState(): DistributionState {
+  return {
+    testedCountries: [],
+    currentStage: 3,
+    cycle: 0,
+    impressions: 0,
+    engagement: 0,
+    lastTestAt: null,
+    nextAction: "test",
+  };
+}
+
+function getPerformance(post: FeedPost, state: DistributionState, now: number) {
+  // Prefer measured state metrics when available; post counters are the fallback for a new simulation.
+  const views = Math.max(0, state.impressions || post.views);
+  const weightedEngagement = Math.max(0, state.engagement || (post.likes + post.comments * 2 + post.shares * 3 + (post.saves ?? 0) * 2));
+  const engagementRate = clamp(weightedEngagement / Math.max(20, views));
+  const velocity = getEngagementVelocity(post, now);
+  return { engagementRate, velocity, performance: engagementRate * 0.7 + velocity * 0.3 };
+}
+
 export function chooseDistribution(
   post: FeedPost,
-  testedCountries: string[] = [],
-  cycle = 0,
+  state: DistributionState = createDistributionState(),
   now = Date.now(),
 ): DistributionDecision {
-  const engagementRate = getEngagementRate(post);
-  const velocity = getEngagementVelocity(post, now);
-  const performance = engagementRate * 0.7 + velocity * 0.3;
-  const nextCountries = seededOrder(COUNTRY_POOL, `${post.id}:${cycle}`)
-    .filter((country) => !testedCountries.includes(country));
+  const safeState: DistributionState = {
+    ...createDistributionState(),
+    ...state,
+    testedCountries: [...new Set(state.testedCountries)],
+  };
+  const { engagementRate, velocity, performance } = getPerformance(post, safeState, now);
 
-  let stage: DistributionStage = 3;
-  let reason: DistributionDecision["reason"] = "initial-test";
-
-  if (cycle > 0 && performance < 0.08) {
-    reason = "second-chance";
+  // Every new post gets exactly one independent 3-country test before any expansion.
+  if (safeState.cycle === 0 || safeState.testedCountries.length === 0) {
+    const countries = seededOrder(COUNTRY_POOL, `${post.id}:initial`).slice(0, 3);
+    const nextState: DistributionState = {
+      ...safeState,
+      testedCountries: countries,
+      currentStage: 3,
+      cycle: 1,
+      lastTestAt: now,
+      nextAction: "test",
+    };
+    return { stage: 3, countries, engagementRate, velocity, reason: "initial-test", state: nextState };
   }
+
+  // A weak result does not kill the post: it gets a second chance in the same test group.
+  if (performance < 0.08) {
+    const nextState: DistributionState = {
+      ...safeState,
+      cycle: safeState.cycle + 1,
+      lastTestAt: now,
+      nextAction: "second-chance",
+    };
+    return {
+      stage: safeState.currentStage,
+      countries: safeState.testedCountries,
+      engagementRate,
+      velocity,
+      reason: "second-chance",
+      state: nextState,
+    };
+  }
+
+  let stage: DistributionStage = safeState.currentStage;
+  let reason: DistributionDecision["reason"] = "hold";
+
   if (performance >= 0.35) {
     stage = 999;
     reason = "global";
@@ -194,17 +255,32 @@ export function chooseDistribution(
   } else if (performance >= 0.10) {
     stage = 5;
     reason = "expand";
-  } else if (cycle > 0) {
-    reason = "hold";
   }
 
-  const count = stage === 999 ? COUNTRY_POOL.length : stage;
-  const countries = seededOrder(
-    [...testedCountries, ...nextCountries],
-    `${post.id}:${cycle}:distribution`,
-  ).slice(0, count);
+  // Never shrink a post's distribution stage. Strong results only expand reach.
+  if (stage < safeState.currentStage && safeState.currentStage !== 999) {
+    stage = safeState.currentStage;
+  }
 
-  return { stage, countries, engagementRate, velocity, reason };
+  const orderedNewCountries = seededOrder(
+    COUNTRY_POOL.filter((country) => !safeState.testedCountries.includes(country)),
+    `${post.id}:cycle:${safeState.cycle}`,
+  );
+  const targetCount = stage === 999 ? COUNTRY_POOL.length : stage;
+  const countries = stage === 999
+    ? [...safeState.testedCountries, ...orderedNewCountries]
+    : [...safeState.testedCountries, ...orderedNewCountries].slice(0, targetCount);
+
+  const nextState: DistributionState = {
+    ...safeState,
+    testedCountries: countries,
+    currentStage: stage,
+    cycle: safeState.cycle + 1,
+    lastTestAt: now,
+    nextAction: stage === 999 ? "global" : reason === "expand" ? "expand" : "hold",
+  };
+
+  return { stage, countries, engagementRate, velocity, reason, state: nextState };
 }
 
 export function getFeedCandidates(posts: FeedPost[], user: FeedUserSignals, options?: FeedRankingOptions) {
