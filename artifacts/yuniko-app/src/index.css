@@ -51,6 +51,8 @@ img, video { display: block; }
 .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
 .glass { background: rgba(10,8,18,.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .gradient-text { background: linear-gradient(90deg,#ff3d9a,#c026d3,#8b00ff); background-clip: text; -webkit-background-clip: text; color: transparent; }
+/* Feed header logo: slightly larger without changing other Yuniko titles. */
+.yuniko-route-page header button.text-2xl.font-black.gradient-text { font-size: 1.8rem; line-height: 1.1; }
 .gradient-bg { background: linear-gradient(135deg,#ff006e,#8b00ff); }
 .safe-bottom { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
