@@ -1,0 +1,72 @@
+name: Remove Yuniko Light Mode
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  remove-light-mode:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove Light Mode cleanly
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          app = Path('artifacts/yuniko-app/src/App.tsx')
+          s = app.read_text()
+
+          s = s.replace('  Moon,\n', '')
+          s = s.replace('  Sun,\n', '')
+          s = s.replace('type Theme = "dark" | "light";\n', '')
+          s = s.replace('  theme: Theme;\n', '')
+          s = s.replace('  theme: "dark",\n', '')
+
+          old_page_shell = '''function PageShell({ children, nav = true, className = "" }: { children: ReactNode; nav?: boolean; className?: string }) {\n  const { state } = useDemo();\n  return <div className={`w-full min-h-screen ${state.theme === "light" ? "yuniko-light bg-[#f7f3fb] text-[#17121f]" : "bg-[#0d0b14] text-white"} ${nav ? "pb-20" : ""} ${className}`}>{children}{nav && <BottomNav />}</div>;\n}'''
+          new_page_shell = '''function PageShell({ children, nav = true, className = "" }: { children: ReactNode; nav?: boolean; className?: string }) {\n  return <div className={`w-full min-h-screen bg-[#0d0b14] text-white ${nav ? "pb-20" : ""} ${className}`}>{children}{nav && <BottomNav />}</div>;\n}'''
+          if old_page_shell not in s:
+              raise SystemExit('Expected PageShell block not found')
+          s = s.replace(old_page_shell, new_page_shell)
+
+          start = s.index('function Settings() {')
+          end = s.index('function ConfirmModal', start)
+          settings = '''function Settings() {\n  const [, navigate] = useLocation();\n  const { activeUser } = useDemo();\n  const [logout, setLogout] = useState(false);\n  const sections = [{ title: "Account", color: "#ff3d9a", items: [["Edit Profile", "/profile/edit", User], ["Username & Email", "/settings/account", User], ["Verify Account", "/account/verify", Check]] }, { title: "Privacy", color: "#b054ff", items: [["Privacy", "/settings/privacy", Eye], ["Blocked Users", "/blocked-users", Lock]] }, { title: "Security", color: "#ff6eb4", items: [["Two-factor authentication", "/settings/security", Shield], ["Active sessions", "/settings/security", Shield]] }, { title: "About", color: "#7eb9ff", items: [["Help Center", "/help", CircleHelp], ["Feedback", "/feedback", MessageCircle], ["App version 1.0.0", "/settings/about", Info]] }] as const;\n  return <PageShell><TopBar title="Settings" /><button onClick={() => navigate("/profile")} className="w-full flex items-center gap-3 px-4 py-4 border-b border-white/[.06] text-left"><Avatar user={activeUser} size="md" ring /><div className="flex-1"><p className="font-semibold">{activeUser.displayName}</p><p className="text-white/50 text-sm">@{activeUser.username}</p></div><ChevronRight size={18} className="text-white/30" /></button>{sections.map((section) => <div key={section.title} className="px-4 py-4 border-b border-white/[.06]"><p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-3">{section.title}</p><div className="rounded-2xl overflow-hidden bg-white/[.03] border border-white/[.07]">{section.items.map(([label, href, Icon], index) => <button key={label} onClick={() => navigate(href)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left" style={{ borderBottom: index < section.items.length - 1 ? "1px solid rgba(255,255,255,.06)" : "none" }}><span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${section.color}18` }}><Icon size={16} style={{ color: section.color }} /></span><span className="flex-1 text-white/80 text-sm">{label}</span><ChevronRight size={14} className="text-white/25" /></button>)}</div></div>)}<div className="px-4 py-4"><button onClick={() => setLogout(true)} className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-red-500/10 border border-red-500/20"><LogOut size={18} className="text-red-400" /><span className="text-red-400 font-medium text-sm">Log out</span></button></div>{logout && <ConfirmModal title="Log out?" body="You can come back anytime." onCancel={() => setLogout(false)} onConfirm={() => { localStorage.removeItem("yuniko-demo-auth"); navigate("/login"); }} />}</PageShell>;\n}\n'''
+          s = s[:start] + settings + s[end:]
+          app.write_text(s)
+
+          css = '''@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');\n@import "tailwindcss";\n@import "tw-animate-css";\n\n:root {\n  --background: 250 30% 7%;\n  --foreground: 0 0% 98%;\n  --card: 250 28% 10%;\n  --card-foreground: 0 0% 98%;\n  --border: 250 18% 19%;\n  --muted: 250 20% 15%;\n  --muted-foreground: 250 10% 61%;\n  --primary: 330 100% 50%;\n  --primary-foreground: 0 0% 100%;\n  --ring: 330 100% 50%;\n  --radius: .75rem;\n  --app-font-sans: 'DM Sans', sans-serif;\n  --app-font-display: 'Space Grotesk', sans-serif;\n}\n\n* { box-sizing: border-box; }\nhtml, body, #root { width: 100%; min-width: 0; max-width: 100%; min-height: 100%; }\nhtml { overflow-x: hidden; -webkit-text-size-adjust: 100%; }\nbody { margin: 0; min-height: 100vh; overflow-x: hidden; background: #0d0b14; color: #fafafa; font-family: var(--app-font-sans); }\nbutton, input, textarea, select { font: inherit; }\nbutton { cursor: pointer; }\nimg, video, canvas, svg { max-width: 100%; }\nimg, video { display: block; }\n\n.yuniko-root { min-height: 100vh; width: 100%; background: #0d0b14; }\n.yuniko-route-shell, .yuniko-route-page { width: 100%; min-height: 100vh; overflow-x: hidden; }\n.yuniko-app-shell { position: relative; width: 100%; min-height: 100vh; height: 100dvh; overflow: hidden; }\n.yuniko-feed-viewport { scrollbar-width: none; }\n.yuniko-feed-viewport::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar { display: none; }\n.no-scrollbar { scrollbar-width: none; }\n.text-white\\/90 { color: rgba(255,255,255,.9); }\n\n@media (min-width: 640px) {\n  .yuniko-root {\n    background:\n      radial-gradient(ellipse 60% 50% at 20% 0%, rgba(255,0,110,.12), transparent 60%),\n      radial-gradient(ellipse 60% 50% at 80% 100%, rgba(139,0,255,.1), transparent 60%), #0b0911;\n  }\n}\n@media (min-width: 768px) {\n  .yuniko-route-page > *:not(.fixed), .yuniko-route-page > .yuniko-app-shell { max-width: 1100px; margin-inline: auto; }\n  .yuniko-app-shell { max-width: 980px; }\n}\n\n.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }\n.pt-safe { padding-top: env(safe-area-inset-top, 0px); }\n.glass { background: rgba(10,8,18,.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }\n.gradient-text { background: linear-gradient(90deg,#ff3d9a,#c026d3,#8b00ff); background-clip: text; -webkit-background-clip: text; color: transparent; }\n.gradient-bg { background: linear-gradient(135deg,#ff006e,#8b00ff); }\n.safe-bottom { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }\n\n@keyframes spin { to { transform: rotate(360deg); } }\n@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }\n.animate-spin { animation: spin .8s linear infinite; }\n.skeleton { position: relative; overflow: hidden; background: rgba(255,255,255,.08); }\n.skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent); animation:shimmer 1.4s infinite; }\n\n@media (max-width: 639px) {\n  .desktop-only { display: none; }\n}\n'''
+          Path('artifacts/yuniko-app/src/index.css').write_text(css)
+
+          # Ensure an old persisted Light Mode choice cannot affect the new single-theme UI.
+          p = Path('artifacts/yuniko-app/src/App.tsx')
+          s = p.read_text()
+          s = s.replace('    return { ...defaultState, ...JSON.parse(saved), profile: { ...defaultState.profile, ...JSON.parse(saved).profile } };', '    const parsed = JSON.parse(saved);\n    delete parsed.theme;\n    return { ...defaultState, ...parsed, profile: { ...defaultState.profile, ...parsed.profile } };')
+          p.write_text(s)
+
+      - name: Verify no Light Mode code remains
+        run: |
+          ! grep -n 'yuniko-light\|Light mode\|theme: Theme\|type Theme' artifacts/yuniko-app/src/App.tsx artifacts/yuniko-app/src/index.css
+
+      - name: Build Yuniko
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/yuniko-app run build
+
+      - name: Commit and remove temporary workflow
+        run: |
+          rm -f .github/workflows/remove-light-mode.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/yuniko-app/src/App.tsx artifacts/yuniko-app/src/index.css .github/workflows/remove-light-mode.yml
+          git commit -m "refactor: make Yuniko dark mode only"
+          git push
