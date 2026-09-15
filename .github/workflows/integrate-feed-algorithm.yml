@@ -43,6 +43,30 @@ jobs:
           path.write_text(text)
           print('Feed ranking is integrated into Home.')
 
+      - name: Add manual Home refresh and new-post badge
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('artifacts/yuniko-app/src/App.tsx')
+          text = path.read_text()
+          if 'yuniko:refresh-feed' in text:
+              print('Refresh logic already present.')
+              raise SystemExit(0)
+
+          old_bottom = '''function BottomNav() {\n  const [location, navigate] = useLocation();\n  const items = [{ path: "/", label: "Home", icon: HomeIcon }, { path: "/notifications", label: "Alerts", icon: Bell }, { path: "/messages", label: "Messages", icon: MessageCircle }, { path: "/profile", label: "Profile", icon: User }];\n  const active = (path: string) => path === "/" ? location === "/" : location.startsWith(path);\n  return <nav className="fixed bottom-0 left-0 right-0 z-50 yuniko-bottom-nav glass border-t border-pink-400/15"><div className="flex items-center justify-around h-16 max-w-[1120px] mx-auto px-2">{items.slice(0, 2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={navigate} />)}<motion.button aria-label="Create" onClick={() => navigate("/create")} whileTap={{ scale: .88 }} className="w-[52px] h-[52px] rounded-full flex items-center justify-center" style={{ background: GRADIENT, boxShadow: "0 0 24px rgba(255,0,110,.45)" }}><Plus size={25} className="text-white" strokeWidth={2.8} /></motion.button>{items.slice(2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={navigate} />)}</div></nav>;\n}\nfunction NavButton({ path, label, icon: Icon, active, navigate }: { path: string; label: string; icon: typeof HomeIcon; active: boolean; navigate: (path: string) => void }) {\n  return <button aria-label={label} onClick={() => navigate(path)} className="w-14 h-14 flex flex-col items-center justify-center gap-0.5 relative"><Icon size={22} style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.45)" }} strokeWidth={active ? 2.3 : 1.7} /><span className="text-[10px]" style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.38)" }}>{label}</span><span className="absolute bottom-0 w-1 h-1 rounded-full bg-pink-400" style={{ opacity: active ? 1 : 0 }} /></button>;\n}\n'''
+          new_bottom = '''function BottomNav() {\n  const [location, navigate] = useLocation();\n  const { state } = useDemo();\n  const [newPostCount, setNewPostCount] = useState(0);\n  const [feedSeenAt, setFeedSeenAt] = useState(() => {\n    const stored = Number(localStorage.getItem("yuniko-feed-seen-at") || 0);\n    if (stored > 0) return stored;\n    const latest = Math.max(0, ...defaultState.posts.map((post) => post.createdAt));\n    const initial = latest || Date.now();\n    localStorage.setItem("yuniko-feed-seen-at", String(initial));\n    return initial;\n  });\n  const items = [{ path: "/", label: "Home", icon: HomeIcon }, { path: "/notifications", label: "Alerts", icon: Bell }, { path: "/messages", label: "Messages", icon: MessageCircle }, { path: "/profile", label: "Profile", icon: User }];\n  const active = (path: string) => path === "/" ? location === "/" : location.startsWith(path);\n\n  useEffect(() => {\n    setNewPostCount(state.posts.filter((post) => post.createdAt > feedSeenAt).length);\n  }, [state.posts, feedSeenAt]);\n\n  const refreshHomeFeed = () => {\n    const now = Date.now();\n    localStorage.setItem("yuniko-feed-seen-at", String(now));\n    setFeedSeenAt(now);\n    setNewPostCount(0);\n    window.dispatchEvent(new CustomEvent("yuniko:refresh-feed"));\n    navigate("/");\n  };\n\n  return <nav className="fixed bottom-0 left-0 right-0 z-50 yuniko-bottom-nav glass border-t border-pink-400/15"><div className="flex items-center justify-around h-16 max-w-[1120px] mx-auto px-2">{items.slice(0, 2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={path === "/" ? refreshHomeFeed : navigate} badge={path === "/" && newPostCount > 0 ? Math.min(newPostCount, 15) : 0} />)}<motion.button aria-label="Create" onClick={() => navigate("/create")} whileTap={{ scale: .88 }} className="w-[52px] h-[52px] rounded-full flex items-center justify-center" style={{ background: GRADIENT, boxShadow: "0 0 24px rgba(255,0,110,.45)" }}><Plus size={25} className="text-white" strokeWidth={2.8} /></motion.button>{items.slice(2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={navigate} />)}</div></nav>;\n}\nfunction NavButton({ path, label, icon: Icon, active, navigate, badge = 0 }: { path: string; label: string; icon: typeof HomeIcon; active: boolean; navigate: (path: string) => void; badge?: number }) {\n  return <button aria-label={label} onClick={() => navigate(path)} className="w-14 h-14 flex flex-col items-center justify-center gap-0.5 relative"><span className="relative"><Icon size={22} style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.45)" }} strokeWidth={active ? 2.3 : 1.7} />{badge > 0 && <span className="absolute -top-2 -right-3 min-w-[20px] h-[18px] px-1 rounded-full bg-pink-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-[#0d0b14]">{badge >= 15 ? "15+" : badge}</span>}</span><span className="text-[10px]" style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.38)" }}>{label}</span><span className="absolute bottom-0 w-1 h-1 rounded-full bg-pink-400" style={{ opacity: active ? 1 : 0 }} /></button>;\n}\n'''
+          if old_bottom not in text:
+              raise SystemExit('BottomNav block not found; aborting without changes')
+          text = text.replace(old_bottom, new_bottom, 1)
+
+          old_effect = '''  useEffect(() => {\n    setFeedCycle((cycle) => cycle + 1);\n  }, []);\n'''
+          new_effect = '''  useEffect(() => {\n    setFeedCycle((cycle) => cycle + 1);\n    const refresh = () => {\n      setFeedCycle((cycle) => cycle + 1);\n      window.scrollTo({ top: 0, behavior: "smooth" });\n    };\n    window.addEventListener("yuniko:refresh-feed", refresh);\n    return () => window.removeEventListener("yuniko:refresh-feed", refresh);\n  }, []);\n'''
+          if old_effect not in text:
+              raise SystemExit('Feed cycle effect not found; aborting without changes')
+          text = text.replace(old_effect, new_effect, 1)
+          path.write_text(text)
+          print('Home refresh and badge logic applied.')
+
       - name: Build Yuniko
         run: |
           corepack enable
@@ -56,5 +80,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add artifacts/yuniko-app/src/App.tsx
           git diff --cached --quiet && exit 0
-          git commit -m "feat: connect feed ranking to Home"
+          git commit -m "feat: connect feed ranking and manual refresh to Home"
           git push
