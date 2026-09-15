@@ -4,19 +4,19 @@
 
 /*
  * Yuniko theme tokens.
- * The light/dark pairing intentionally follows the token-based approach
- * used by Meta's open-source StyleX/XDS stack: components consume semantic
- * tokens while the theme supplies the values.
+ * Dark mode remains the existing Yuniko palette.
+ * Light mode uses semantic tokens, following the token-based theming
+ * approach used by Meta's open-source StyleX system.
  */
 :root {
   color-scheme: dark;
-  --background: light-dark(#f7f3fb, #0d0b14);
-  --foreground: light-dark(#17121f, #fafafa);
-  --card: light-dark(#ffffff, #191620);
-  --card-foreground: light-dark(#17121f, #fafafa);
-  --border: light-dark(#ded7e8, #302b39);
-  --muted: light-dark(#eeeaf3, #211d29);
-  --muted-foreground: light-dark(#6d6576, #9c95a8);
+  --background: #0d0b14;
+  --foreground: #fafafa;
+  --card: #191620;
+  --card-foreground: #fafafa;
+  --border: #302b39;
+  --muted: #211d29;
+  --muted-foreground: #9c95a8;
   --primary: #ff006e;
   --primary-foreground: #ffffff;
   --ring: #ff006e;
@@ -24,20 +24,39 @@
   --app-font-display: 'Space Grotesk', sans-serif;
   --radius: .75rem;
 
-  /* Semantic surfaces used by Yuniko components. */
   --surface: var(--card);
-  --surface-raised: light-dark(#ffffff, #211d29);
-  --surface-overlay: light-dark(rgba(255,255,255,.92), rgba(10,8,18,.88));
+  --surface-raised: #211d29;
+  --surface-overlay: rgba(10,8,18,.88);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
   --text-inverse: #ffffff;
-  --icon-muted: light-dark(rgba(23,18,31,.45), rgba(255,255,255,.45));
+  --icon-muted: rgba(255,255,255,.45);
   --divider: var(--border);
 }
 
-/* Explicit theme selection used by Yuniko's existing settings state. */
+/*
+ * Light mode only.
+ * This is the same semantic-token idea used by Meta's open-source
+ * theming architecture: components consume variables and the theme
+ * supplies the light values. Nothing in the dark token set is changed.
+ */
 .yuniko-light {
   color-scheme: light;
+  --background: #f5f3f8;
+  --foreground: #17121f;
+  --card: #ffffff;
+  --card-foreground: #17121f;
+  --border: #e1dce8;
+  --muted: #eeeaf3;
+  --muted-foreground: #6d6576;
+  --surface: var(--card);
+  --surface-raised: #ffffff;
+  --surface-overlay: rgba(255,255,255,.94);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-inverse: #ffffff;
+  --icon-muted: rgba(23,18,31,.45);
+  --divider: var(--border);
 }
 
 .yuniko-root:not(.yuniko-light) {
@@ -80,6 +99,14 @@ img, video { display: block; }
       radial-gradient(ellipse 60% 50% at 80% 100%, rgba(139,0,255,.1), transparent 60%), var(--background);
   }
 }
+
+/* Light mode keeps the same gradient identity while making the base surface bright. */
+.yuniko-light .yuniko-root {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 0%, rgba(255,0,110,.08), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(139,0,255,.07), transparent 60%), var(--background);
+}
+
 @media (min-width: 768px) {
   .yuniko-route-page > *:not(.fixed), .yuniko-route-page > .yuniko-app-shell { max-width: 1100px; margin-inline: auto; }
   .yuniko-app-shell { max-width: 980px; }
@@ -96,19 +123,26 @@ img, video { display: block; }
 .gradient-bg { background: linear-gradient(135deg,#ff006e,#8b00ff); }
 .safe-bottom { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
-/* Common semantic utility surfaces now consume the same theme tokens. */
+/* Light-mode compatibility for existing Tailwind surfaces. */
 .yuniko-light .bg-white { background-color: var(--surface-raised) !important; }
+.yuniko-light .bg-black { background-color: var(--background) !important; }
 .yuniko-light .text-white { color: var(--text-primary) !important; }
+.yuniko-light .text-white\/90 { color: color-mix(in srgb, var(--text-primary) 90%, transparent) !important; }
 .yuniko-light .text-white\/80 { color: color-mix(in srgb, var(--text-primary) 80%, transparent) !important; }
 .yuniko-light .text-white\/65 { color: color-mix(in srgb, var(--text-primary) 65%, transparent) !important; }
 .yuniko-light .text-white\/45 { color: color-mix(in srgb, var(--text-primary) 45%, transparent) !important; }
 .yuniko-light .border-white\/\[\.06\] { border-color: var(--divider) !important; }
+.yuniko-light .border-white\/10 { border-color: color-mix(in srgb, var(--text-primary) 10%, transparent) !important; }
+.yuniko-light .bg-white\/5 { background-color: color-mix(in srgb, var(--text-primary) 5%, transparent) !important; }
+.yuniko-light .bg-white\/10 { background-color: color-mix(in srgb, var(--text-primary) 10%, transparent) !important; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 .animate-spin { animation: spin .8s linear infinite; }
-.skeleton { position: relative; overflow: hidden; background: light-dark(rgba(23,18,31,.06), rgba(255,255,255,.08)); }
-.skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,light-dark(rgba(23,18,31,.06),rgba(255,255,255,.08)),transparent); animation:shimmer 1.4s infinite; }
+.skeleton { position: relative; overflow: hidden; background: rgba(255,255,255,.08); }
+.yuniko-light .skeleton { background: rgba(23,18,31,.06); }
+.skeleton::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent); animation:shimmer 1.4s infinite; }
+.yuniko-light .skeleton::after { background:linear-gradient(90deg,transparent,rgba(23,18,31,.06),transparent); }
 
 @media (max-width: 639px) {
   .desktop-only { display: none; }
