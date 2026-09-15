@@ -20,43 +20,27 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import re
-
           path = Path('artifacts/yuniko-app/src/App.tsx')
           text = path.read_text()
-
           if 'import { rankFeedPosts } from "./feedAlgorithm";' not in text:
               text = text.replace('import "./index.css";\n', 'import "./index.css";\nimport { rankFeedPosts } from "./feedAlgorithm";\n', 1)
-
           if 'const rankedPosts = useMemo(() =>' not in text:
-              marker = '  const [online, setOnline] = useState(navigator.onLine);\n'
-              if marker not in text:
-                  raise SystemExit('Home online-state marker not found; aborting without changes.')
-              logic = '''  const [feedCycle, setFeedCycle] = useState(0);\n\n  useEffect(() => {\n    setFeedCycle((cycle) => cycle + 1);\n  }, []);\n\n  const rankedPosts = useMemo(() => {\n    const historyKey = "yuniko-feed-history";\n    let recentlySeenPostIds: string[] = [];\n    try {\n      recentlySeenPostIds = JSON.parse(localStorage.getItem(historyKey) || "[]");\n    } catch {\n      recentlySeenPostIds = [];\n    }\n\n    const recentlySeenUserIds = state.posts\n      .filter((post) => recentlySeenPostIds.includes(post.id))\n      .map((post) => post.user.id);\n\n    const followedUserIds = state.following;\n    const interests: Record<string, number> = {};\n    state.posts.forEach((post) => {\n      post.hashtags.forEach((tag) => {\n        const key = tag.replace(/^#/, "").toLowerCase();\n        interests[key] = Math.max(interests[key] || 0, followedUserIds.includes(post.user.id) ? 1 : 0.25);\n      });\n    });\n\n    const ranked = rankFeedPosts(\n      state.posts.map((post, index) => ({\n        id: post.id,\n        userId: post.user.id,\n        hashtags: post.hashtags,\n        likes: post.likes + (state.liked.includes(post.id) ? 1 : 0),\n        comments: Math.max(post.comments, state.comments[post.id]?.length || 0),\n        shares: post.shares,\n        saves: state.saved.includes(post.id) ? 1 : 0,\n        views: post.views,\n        createdAt: post.id.startsWith("p-") ? Number(post.id.slice(2)) || Date.now() : Date.now() - index * 2 * 60 * 60 * 1000,\n      })),\n      {\n        followedUserIds,\n        interests,\n        recentlySeenPostIds,\n        recentlySeenUserIds,\n        notInterestedPostIds: [],\n        notInterestedUserIds: state.blocked,\n      },\n      { maxPostsPerUser: 2 },\n    );\n\n    const ordered = ranked\n      .map((rankedPost) => state.posts.find((post) => post.id === rankedPost.id))\n      .filter(Boolean) as typeof state.posts;\n\n    if (ordered.length) {\n      const nextHistory = [...new Set([...ordered.slice(0, 4).map((post) => post.id), ...recentlySeenPostIds])].slice(0, 12);\n      try {\n        localStorage.setItem(historyKey, JSON.stringify(nextHistory));\n      } catch {\n        // Ignore storage failures; the feed still works in memory.\n      }\n    }\n\n    return ordered;\n  }, [state.posts, state.following, state.liked, state.saved, state.comments, state.blocked, feedCycle]);\n'''
-              text = text.replace(marker, marker + logic, 1)
-
-          if '{state.posts.map((post) =>' in text:
-              text = text.replace('{state.posts.map((post) =>', '{rankedPosts.map((post) =>', 1)
-          elif '{rankedPosts.map((post) =>' not in text:
-              raise SystemExit('Feed posts render marker not found; aborting without changes.')
-
+              raise SystemExit('Feed ranking is missing; use the existing ranking integration workflow.')
+          if '{rankedPosts.map((post) =>' not in text:
+              raise SystemExit('Ranked feed render is missing.')
           path.write_text(text)
-          print('Feed ranking is integrated into Home.')
+          print('Feed ranking verified.')
 
-      - name: Add manual Home refresh and new-post badge
+      - name: Verify manual Home refresh and new-post badge
         shell: python
         run: |
           from pathlib import Path
-          path = Path('artifacts/yuniko-app/src/App.tsx')
-          text = path.read_text()
-          if 'yuniko:refresh-feed' in text:
-              print('Refresh logic already present.')
-              raise SystemExit(0)
-
-          old_bottom = '''function BottomNav {'''
-          if old_bottom not in text:
-              raise SystemExit('BottomNav marker not found; aborting without changes')
-          print('Refresh logic is already integrated or was handled by the previous integration.')
+          text = Path('artifacts/yuniko-app/src/App.tsx').read_text()
+          required = ['yuniko-feed-seen-at', 'newPostCount', 'yuniko:refresh-feed', 'Math.min(newPostCount, 15)']
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit('Missing refresh/badge logic: ' + ', '.join(missing))
+          print('Manual Home refresh and 15+ badge verified.')
 
       - name: Freeze feed until manual Home refresh
         shell: python
@@ -69,9 +53,9 @@ jobs:
           if old in text:
               text = text.replace(old, new, 1)
           elif new not in text:
-              raise SystemExit('Feed ranking dependency line not found; aborting without changes.')
+              raise SystemExit('Feed ranking dependency line not found.')
           path.write_text(text)
-          print('Feed order is now frozen until a manual Home refresh.')
+          print('Feed order is frozen until a manual Home refresh.')
 
       - name: Build Yuniko
         run: |
