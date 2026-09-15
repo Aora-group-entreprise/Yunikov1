@@ -87,6 +87,7 @@ type DemoPost = {
   comments: number;
   shares: number;
   views: number;
+  createdAt: number;
   location?: string;
 };
 type DemoStory = { id: string; user: DemoUser; image: string; viewed?: boolean };
@@ -128,9 +129,9 @@ const people: DemoUser[] = [
   { id: "3", username: "lina.rose", displayName: "Lina Rose", avatar: IMG.flower, bio: "A soft spot for strange flowers.", followers: 3204, following: 244, posts: 210 },
 ];
 const basePosts: DemoPost[] = [
-  { id: "p1", user: people[1], image: IMG.roof, caption: "Found a little more color on the way home.", hashtags: ["#nightwalk", "#citylight"], likes: 1247, comments: 38, shares: 17, views: 8400, location: "Seoul, South Korea" },
-  { id: "p2", user: people[2], image: IMG.dj, caption: "The room changes when the bass comes in.", hashtags: ["#afterdark", "#soundcheck"], likes: 892, comments: 24, shares: 12, views: 5200 },
-  { id: "p3", user: people[3], image: IMG.flower, caption: "Tiny worlds hiding in plain sight.", hashtags: ["#softfocus"], likes: 634, comments: 19, shares: 8, views: 3100, location: "Lisbon, Portugal" },
+  { id: "p1", user: people[1], image: IMG.roof, caption: "Found a little more color on the way home.", hashtags: ["#nightwalk", "#citylight"], likes: 1247, comments: 38, shares: 17, views: 8400, createdAt: Date.now() - 3 * 60 * 60 * 1000, location: "Seoul, South Korea" },
+  { id: "p2", user: people[2], image: IMG.dj, caption: "The room changes when the bass comes in.", hashtags: ["#afterdark", "#soundcheck"], likes: 892, comments: 24, shares: 12, views: 5200, createdAt: Date.now() - 8 * 60 * 60 * 1000 },
+  { id: "p3", user: people[3], image: IMG.flower, caption: "Tiny worlds hiding in plain sight.", hashtags: ["#softfocus"], likes: 634, comments: 19, shares: 8, views: 3100, createdAt: Date.now() - 14 * 60 * 60 * 1000, location: "Lisbon, Portugal" },
 ];
 const baseStories: DemoStory[] = [
   { id: "s1", user: people[1], image: IMG.roof },
@@ -205,7 +206,7 @@ function StoreProvider({ children }: { children: ReactNode }) {
     setState((previous) => ({ ...previous, [key]: previous[key].includes(value) ? previous[key].filter((item) => item !== value) : [...previous[key], value] }));
   }, []);
   const addPost = useCallback((input: { caption: string; image?: string; location?: string; hashtags?: string[] }) => {
-    setState((previous) => ({ ...previous, posts: [{ id: `p-${Date.now()}`, user: { ...activeUser, posts: activeUser.posts + 1 }, image: input.image || IMG.neon, caption: input.caption || "A little spark from today.", hashtags: input.hashtags || [], likes: 0, comments: 0, shares: 0, views: 0, location: input.location || undefined }, ...previous.posts] }));
+    setState((previous) => ({ ...previous, posts: [{ id: `p-${Date.now()}`, user: { ...activeUser, posts: activeUser.posts + 1 }, image: input.image || IMG.neon, caption: input.caption || "A little spark from today.", hashtags: input.hashtags || [], likes: 0, comments: 0, shares: 0, views: 0, createdAt: Date.now(), location: input.location || undefined }, ...previous.posts] }));
     showToast("Post published");
   }, [activeUser, showToast]);
   const addStory = useCallback((input: { caption: string; image?: string }) => {
@@ -336,7 +337,7 @@ function Home() {
         shares: post.shares,
         saves: state.saved.includes(post.id) ? 1 : 0,
         views: post.views,
-        createdAt: post.id.startsWith("p-") ? Number(post.id.slice(2)) || Date.now() : Date.now() - index * 2 * 60 * 60 * 1000,
+        createdAt: post.createdAt,
       })),
       {
         followedUserIds,
