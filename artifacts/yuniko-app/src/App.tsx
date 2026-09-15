@@ -56,6 +56,7 @@ import {
   X,
 } from "lucide-react";
 import "./index.css";
+import { rankFeedPosts } from "./feedAlgorithm";
 
 const GRADIENT = "linear-gradient(135deg,#FF006E 0%,#8B00FF 100%)";
 const IMG = {
@@ -297,8 +298,74 @@ function Home() {
   const { state } = useDemo();
   const [worldMenu, setWorldMenu] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
+  const [feedCycle, setFeedCycle] = useState(0);
+
+  useEffect(() => {
+    setFeedCycle((cycle) => cycle + 1);
+  }, []);
+
+  const rankedPosts = useMemo(() => {
+    const historyKey = "yuniko-feed-history";
+    let recentlySeenPostIds: string[] = [];
+    try {
+      recentlySeenPostIds = JSON.parse(localStorage.getItem(historyKey) || "[]");
+    } catch {
+      recentlySeenPostIds = [];
+    }
+
+    const recentlySeenUserIds = state.posts
+      .filter((post) => recentlySeenPostIds.includes(post.id))
+      .map((post) => post.user.id);
+
+    const followedUserIds = state.following;
+    const interests: Record<string, number> = {};
+    state.posts.forEach((post) => {
+      post.hashtags.forEach((tag) => {
+        const key = tag.replace(/^#/, "").toLowerCase();
+        interests[key] = Math.max(interests[key] || 0, followedUserIds.includes(post.user.id) ? 1 : 0.25);
+      });
+    });
+
+    const ranked = rankFeedPosts(
+      state.posts.map((post, index) => ({
+        id: post.id,
+        userId: post.user.id,
+        hashtags: post.hashtags,
+        likes: post.likes + (state.liked.includes(post.id) ? 1 : 0),
+        comments: Math.max(post.comments, state.comments[post.id]?.length || 0),
+        shares: post.shares,
+        saves: state.saved.includes(post.id) ? 1 : 0,
+        views: post.views,
+        createdAt: post.id.startsWith("p-") ? Number(post.id.slice(2)) || Date.now() : Date.now() - index * 2 * 60 * 60 * 1000,
+      })),
+      {
+        followedUserIds,
+        interests,
+        recentlySeenPostIds,
+        recentlySeenUserIds,
+        notInterestedPostIds: [],
+        notInterestedUserIds: state.blocked,
+      },
+      { maxPostsPerUser: 2 },
+    );
+
+    const ordered = ranked
+      .map((rankedPost) => state.posts.find((post) => post.id === rankedPost.id))
+      .filter(Boolean) as typeof state.posts;
+
+    if (ordered.length) {
+      const nextHistory = [...new Set([...ordered.slice(0, 4).map((post) => post.id), ...recentlySeenPostIds])].slice(0, 12);
+      try {
+        localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+      } catch {
+        // Ignore storage failures; the feed still works in memory.
+      }
+    }
+
+    return ordered;
+  }, [state.posts, state.following, state.liked, state.saved, state.comments, state.blocked, feedCycle]);
   useEffect(() => { const on = () => setOnline(true); const off = () => setOnline(false); window.addEventListener("online", on); window.addEventListener("offline", off); return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); }; }, []);
-  return <PageShell><div className="relative w-full min-h-screen bg-[#0d0b14] overflow-hidden"><header className="absolute inset-x-0 top-0 z-50 h-14 flex items-center justify-between gap-2 px-3 min-[360px]:px-4 glass border-b border-pink-400/10"><button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="text-2xl font-black gradient-text">Yuniko</button><button onClick={() => setWorldMenu(!worldMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/[.06] border border-pink-400/30 text-white/90 text-xs min-[360px]:text-sm"><Globe size={12} />World Feed<ChevronDown size={11} /></button><div className="flex items-center gap-3"><button aria-label="Search" onClick={() => navigate("/search")}><SearchIcon size={20} className="text-white/75" /></button><button aria-label="Add friends" onClick={() => navigate("/add-friends")}><UserPlus size={20} className="text-white/75" /></button></div></header><StoryStrip />{worldMenu && <><button className="fixed inset-0 z-40 cursor-default" onClick={() => setWorldMenu(false)} aria-label="Close menu" /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="absolute top-[60px] left-1/2 -translate-x-1/2 w-44 rounded-2xl z-50 overflow-hidden bg-[#120e1e] border border-pink-400/25"><button onClick={() => setWorldMenu(false)} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Globe size={13} />World Feed</button><button onClick={() => { setWorldMenu(false); navigate("/search?tag=nightwalk"); }} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Hash size={13} />Trending tags</button></motion.div></>}{!online && <div className="absolute inset-x-0 top-[134px] z-40 flex items-center justify-center gap-1.5 py-1.5 bg-red-500/85"><WifiOff size={12} /><span className="text-xs">Offline mode</span></div>}<div className="absolute inset-x-0 top-[134px] bottom-[64px] overflow-y-scroll snap-y snap-mandatory no-scrollbar" data-testid="posts-feed">{state.posts.map((post) => <div key={post.id} className="relative w-full max-w-[920px] mx-auto px-2 py-1 snap-start snap-always" style={{ height: "calc(100dvh - 198px)", minHeight: 480 }}><div className="relative w-full h-full rounded-2xl overflow-hidden"><PostCard post={post} /></div></div>)}</div></div></PageShell>;
+  return <PageShell><div className="relative w-full min-h-screen bg-[#0d0b14] overflow-hidden"><header className="absolute inset-x-0 top-0 z-50 h-14 flex items-center justify-between gap-2 px-3 min-[360px]:px-4 glass border-b border-pink-400/10"><button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="text-2xl font-black gradient-text">Yuniko</button><button onClick={() => setWorldMenu(!worldMenu)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/[.06] border border-pink-400/30 text-white/90 text-xs min-[360px]:text-sm"><Globe size={12} />World Feed<ChevronDown size={11} /></button><div className="flex items-center gap-3"><button aria-label="Search" onClick={() => navigate("/search")}><SearchIcon size={20} className="text-white/75" /></button><button aria-label="Add friends" onClick={() => navigate("/add-friends")}><UserPlus size={20} className="text-white/75" /></button></div></header><StoryStrip />{worldMenu && <><button className="fixed inset-0 z-40 cursor-default" onClick={() => setWorldMenu(false)} aria-label="Close menu" /><motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="absolute top-[60px] left-1/2 -translate-x-1/2 w-44 rounded-2xl z-50 overflow-hidden bg-[#120e1e] border border-pink-400/25"><button onClick={() => setWorldMenu(false)} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Globe size={13} />World Feed</button><button onClick={() => { setWorldMenu(false); navigate("/search?tag=nightwalk"); }} className="w-full px-4 py-3 text-left text-sm flex items-center gap-2"><Hash size={13} />Trending tags</button></motion.div></>}{!online && <div className="absolute inset-x-0 top-[134px] z-40 flex items-center justify-center gap-1.5 py-1.5 bg-red-500/85"><WifiOff size={12} /><span className="text-xs">Offline mode</span></div>}<div className="absolute inset-x-0 top-[134px] bottom-[64px] overflow-y-scroll snap-y snap-mandatory no-scrollbar" data-testid="posts-feed">{rankedPosts.map((post) => <div key={post.id} className="relative w-full max-w-[920px] mx-auto px-2 py-1 snap-start snap-always" style={{ height: "calc(100dvh - 198px)", minHeight: 480 }}><div className="relative w-full h-full rounded-2xl overflow-hidden"><PostCard post={post} /></div></div>)}</div></div></PageShell>;
 }
 
 function Login({ onLogin }: { onLogin: () => void }) {
