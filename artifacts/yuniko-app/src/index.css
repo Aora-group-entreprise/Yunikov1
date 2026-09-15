@@ -63,32 +63,3 @@ img, video { display: block; }
 @media (max-width: 639px) {
   .desktop-only { display: none; }
 }
-
-/* Full light theme: replace dark-only internal surfaces without changing the layout or gradient identity. */
-.yuniko-light,
-.yuniko-light .home-surface,
-.yuniko-light .story-page,
-.yuniko-light .call-page { background: #f7f3fb !important; color: #17121f !important; }
-.yuniko-light .glass { background: rgba(255,255,255,.92) !important; border-color: rgba(32,20,55,.10) !important; color: #17121f !important; }
-.yuniko-light [class*="text-white"] { color: #241d2d !important; }
-.yuniko-light [class*="placeholder:text-white"]::placeholder { color: rgba(36,29,45,.42) !important; }
-.yuniko-light [class*="bg-white"] { background-color: rgba(35,25,50,.055) !important; }
-.yuniko-light [class*="border-white"] { border-color: rgba(35,25,50,.10) !important; }
-.yuniko-light [class*="bg-black"] { background-color: rgba(35,25,50,.10) !important; }
-.yuniko-light .home-surface { background: #f7f3fb !important; }
-.yuniko-light .home-surface .text-white { color: #fff !important; }
-.yuniko-light .home-surface .bg-black\/40,
-.yuniko-light .home-surface .bg-black\/35,
-.yuniko-light .home-surface .bg-black\/45 { background-color: rgba(0,0,0,.38) !important; }
-.yuniko-light .story-page { background: #f7f3fb !important; }
-.yuniko-light .story-page .bg-black\/35 { background-color: rgba(0,0,0,.32) !important; }
-.yuniko-light .story-page .text-white { color: #fff !important; }
-.yuniko-light .call-page { background: linear-gradient(to bottom,#f3eaf9,#f7f3fb) !important; }
-.yuniko-light input,
-.yuniko-light textarea,
-.yuniko-light select { color: #17121f !important; }
-.yuniko-light .yuniko-bottom-nav { background: rgba(255,255,255,.94) !important; }
-.yuniko-light .skeleton { background: rgba(35,25,50,.08); }
-
-/* Feed logo sizing only; no general layout redesign. */
-button.text-3xl.font-black.gradient-text { min-width: 92px; }
