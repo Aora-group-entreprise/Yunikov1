@@ -256,12 +256,36 @@ function Splash({ onDone }: { onDone: () => void }) {
 
 function BottomNav() {
   const [location, navigate] = useLocation();
+  const { state } = useDemo();
+  const [newPostCount, setNewPostCount] = useState(0);
+  const [feedSeenAt, setFeedSeenAt] = useState(() => {
+    const stored = Number(localStorage.getItem("yuniko-feed-seen-at") || 0);
+    if (stored > 0) return stored;
+    const latest = Math.max(0, ...defaultState.posts.map((post) => post.createdAt));
+    const initial = latest || Date.now();
+    localStorage.setItem("yuniko-feed-seen-at", String(initial));
+    return initial;
+  });
   const items = [{ path: "/", label: "Home", icon: HomeIcon }, { path: "/notifications", label: "Alerts", icon: Bell }, { path: "/messages", label: "Messages", icon: MessageCircle }, { path: "/profile", label: "Profile", icon: User }];
   const active = (path: string) => path === "/" ? location === "/" : location.startsWith(path);
-  return <nav className="fixed bottom-0 left-0 right-0 z-50 yuniko-bottom-nav glass border-t border-pink-400/15"><div className="flex items-center justify-around h-16 max-w-[1120px] mx-auto px-2">{items.slice(0, 2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={navigate} />)}<motion.button aria-label="Create" onClick={() => navigate("/create")} whileTap={{ scale: .88 }} className="w-[52px] h-[52px] rounded-full flex items-center justify-center" style={{ background: GRADIENT, boxShadow: "0 0 24px rgba(255,0,110,.45)" }}><Plus size={25} className="text-white" strokeWidth={2.8} /></motion.button>{items.slice(2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={navigate} />)}</div></nav>;
+
+  useEffect(() => {
+    setNewPostCount(state.posts.filter((post) => post.createdAt > feedSeenAt).length);
+  }, [state.posts, feedSeenAt]);
+
+  const refreshHomeFeed = () => {
+    const now = Date.now();
+    localStorage.setItem("yuniko-feed-seen-at", String(now));
+    setFeedSeenAt(now);
+    setNewPostCount(0);
+    window.dispatchEvent(new CustomEvent("yuniko:refresh-feed"));
+    navigate("/");
+  };
+
+  return <nav className="fixed bottom-0 left-0 right-0 z-50 yuniko-bottom-nav glass border-t border-pink-400/15"><div className="flex items-center justify-around h-16 max-w-[1120px] mx-auto px-2">{items.slice(0, 2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={path === "/" ? refreshHomeFeed : navigate} badge={path === "/" && newPostCount > 0 ? Math.min(newPostCount, 15) : 0} />)}<motion.button aria-label="Create" onClick={() => navigate("/create")} whileTap={{ scale: .88 }} className="w-[52px] h-[52px] rounded-full flex items-center justify-center" style={{ background: GRADIENT, boxShadow: "0 0 24px rgba(255,0,110,.45)" }}><Plus size={25} className="text-white" strokeWidth={2.8} /></motion.button>{items.slice(2).map(({ path, label, icon: Icon }) => <NavButton key={path} path={path} label={label} icon={Icon} active={active(path)} navigate={navigate} />)}</div></nav>;
 }
-function NavButton({ path, label, icon: Icon, active, navigate }: { path: string; label: string; icon: typeof HomeIcon; active: boolean; navigate: (path: string) => void }) {
-  return <button aria-label={label} onClick={() => navigate(path)} className="w-14 h-14 flex flex-col items-center justify-center gap-0.5 relative"><Icon size={22} style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.45)" }} strokeWidth={active ? 2.3 : 1.7} /><span className="text-[10px]" style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.38)" }}>{label}</span><span className="absolute bottom-0 w-1 h-1 rounded-full bg-pink-400" style={{ opacity: active ? 1 : 0 }} /></button>;
+function NavButton({ path, label, icon: Icon, active, navigate, badge = 0 }: { path: string; label: string; icon: typeof HomeIcon; active: boolean; navigate: (path: string) => void; badge?: number }) {
+  return <button aria-label={label} onClick={() => navigate(path)} className="w-14 h-14 flex flex-col items-center justify-center gap-0.5 relative"><span className="relative"><Icon size={22} style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.45)" }} strokeWidth={active ? 2.3 : 1.7} />{badge > 0 && <span className="absolute -top-2 -right-3 min-w-[20px] h-[18px] px-1 rounded-full bg-pink-500 text-white text-[9px] font-black flex items-center justify-center border-2 border-[#0d0b14]">{badge >= 15 ? "15+" : badge}</span>}</span><span className="text-[10px]" style={{ color: active ? "#FF3D9A" : "rgba(255,255,255,.38)" }}>{label}</span><span className="absolute bottom-0 w-1 h-1 rounded-full bg-pink-400" style={{ opacity: active ? 1 : 0 }} /></button>;
 }
 function PageShell({ children, nav = true, className = "" }: { children: ReactNode; nav?: boolean; className?: string }) {
   return <div className={`w-full min-h-screen bg-[#0d0b14] text-white ${nav ? "pb-20" : ""} ${className}`}>{children}{nav && <BottomNav />}</div>;
@@ -303,6 +327,12 @@ function Home() {
 
   useEffect(() => {
     setFeedCycle((cycle) => cycle + 1);
+    const refresh = () => {
+      setFeedCycle((cycle) => cycle + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("yuniko:refresh-feed", refresh);
+    return () => window.removeEventListener("yuniko:refresh-feed", refresh);
   }, []);
 
   const rankedPosts = useMemo(() => {
