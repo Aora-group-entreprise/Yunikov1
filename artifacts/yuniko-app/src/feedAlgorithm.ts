@@ -191,9 +191,11 @@ export function createDistributionState(): DistributionState {
 }
 
 function getPerformance(post: FeedPost, state: DistributionState, now: number) {
-  // Prefer measured state metrics when available; post counters are the fallback for a new simulation.
-  const views = Math.max(0, state.impressions || post.views);
-  const weightedEngagement = Math.max(0, state.engagement || (post.likes + post.comments * 2 + post.shares * 3 + (post.saves ?? 0) * 2));
+  const hasMeasuredTest = state.impressions > 0;
+  const views = hasMeasuredTest ? state.impressions : Math.max(0, post.views);
+  const weightedEngagement = hasMeasuredTest
+    ? Math.max(0, state.engagement)
+    : Math.max(0, post.likes + post.comments * 2 + post.shares * 3 + (post.saves ?? 0) * 2);
   const engagementRate = clamp(weightedEngagement / Math.max(20, views));
   const velocity = getEngagementVelocity(post, now);
   return { engagementRate, velocity, performance: engagementRate * 0.7 + velocity * 0.3 };
