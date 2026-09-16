@@ -12,6 +12,7 @@ export const UploadUrlResponse = z.object({
   uploadId: z.string().uuid(),
   uploadUrl: z.string().url(),
   objectKey: z.string().min(1),
+  publicUrl: z.string().url(),
   expiresAt: z.string(),
 });
 
@@ -20,3 +21,4 @@ export const RequestUploadUrlsResponse = z.object({
 });
 
 export type RequestUploadUrlsInput = z.infer<typeof RequestUploadUrlsInput>;
+export type RequestUploadUrlsResponse = z.infer<typeof RequestUploadUrlsResponse>;
