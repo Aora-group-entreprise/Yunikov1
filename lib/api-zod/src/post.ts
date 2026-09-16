@@ -8,6 +8,9 @@ export const CreatePostInput = z.object({
   visibility: PostVisibility.default("public"),
   media: z.array(z.object({
     url: z.string().url().max(4096),
+    objectKey: z.string().min(1).max(1024),
+    contentType: z.string().min(1).max(127),
+    fileSize: z.number().int().positive().max(100 * 1024 * 1024),
     width: z.number().int().positive().nullable().optional(),
     height: z.number().int().positive().nullable().optional(),
     blurhash: z.string().max(128).nullable().optional(),
