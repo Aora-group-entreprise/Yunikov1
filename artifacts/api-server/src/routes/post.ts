@@ -39,7 +39,7 @@ router.patch("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, re
   }
 });
 
-router.delete("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, res: AuthenticatedRequest extends never ? never : any) => {
+router.delete("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     await deletePost(req.userId!, String(req.params.postId));
     res.status(204).send();
