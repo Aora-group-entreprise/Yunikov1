@@ -1,0 +1,52 @@
+name: Finish Local Inbox Routing
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify and add missing routes only
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/yuniko-app/src/App.tsx')
+          text = p.read_text()
+          if '<Route path="/messages">' not in text or '<Route path="/notifications">' not in text:
+              marker = '</Switch>'
+              if marker not in text:
+                  raise SystemExit('Stopping safely: no Router Switch closing marker.')
+              routes = '      <Route path="/messages"><LocalMessagesRoute /></Route>\n      <Route path="/notifications"><LocalNotificationsRoute /></Route>\n'
+              text = text.replace(marker, routes + '    </Switch>', 1)
+              p.write_text(text)
+              print('Missing local inbox routes added.')
+          else:
+              print('Local inbox routes already present; no change.')
+          if 'from "./socialInbox"' not in text or 'function LocalMessagesRoute' not in text or 'function LocalNotificationsRoute' not in text:
+              raise SystemExit('Stopping safely: local inbox module is not wired.')
+
+      - name: Build Yuniko
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/yuniko-app run build
+
+      - name: Commit only after build passes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/yuniko-app/src/App.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: add local messages and notifications routes"
+          git push
