@@ -52,10 +52,7 @@ export class UploadedObjectProcessor implements PostMediaProcessor {
   }
 }
 
-/**
- * Provider boundary required by the plan. No classifier is faked here.
- * Configure a real provider before production processing is enabled.
- */
+/** Provider boundary required by the plan. No classifier is faked here. */
 export class RequiredModerationProvider implements PostModerationProvider {
   async moderate(): Promise<ModerationResult> {
     throw new Error("moderation_provider_not_configured");
@@ -127,7 +124,16 @@ export async function processPostJob(
   }
 }
 
+export async function recoverStalePostJobs(): Promise<number> {
+  const result = await pool.query(
+    "select yunikov_v1.requeue_stale_post_processing_jobs($1) as count",
+    ["10 minutes"],
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
 export async function processNextPostJob(): Promise<boolean> {
+  await recoverStalePostJobs();
   const result = await pool.query(
     `select id from yunikov_v1.post_processing_jobs
       where status = 'pending'
