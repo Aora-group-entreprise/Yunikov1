@@ -3,18 +3,11 @@ import type { FollowListItem, FollowResponse } from "@workspace/api-zod";
 import { setRlsUser } from "@workspace/db";
 
 function rowToFollow(row: { follower_id: string; following_id: string; status: "pending" | "accepted" }): FollowResponse {
-  return {
-    followerId: row.follower_id,
-    followingId: row.following_id,
-    status: row.status,
-  };
+  return { followerId: row.follower_id, followingId: row.following_id, status: row.status };
 }
 
 async function ensureTarget(client: import("pg").PoolClient, userId: string, targetId: string) {
-  const target = await client.query(
-    "select id, is_private from profiles where id = $1",
-    [targetId],
-  );
+  const target = await client.query("select id, is_private from profiles where id = $1", [targetId]);
   if (!target.rows[0]) throw new Error("user_not_found");
   if (userId === targetId) throw new Error("cannot_follow_self");
 
@@ -26,7 +19,6 @@ async function ensureTarget(client: import("pg").PoolClient, userId: string, tar
     [userId, targetId],
   );
   if (blocked.rowCount) throw new Error("blocked_relationship");
-
   return Boolean(target.rows[0].is_private);
 }
 
@@ -36,7 +28,6 @@ export async function toggleFollow(userId: string, targetId: string): Promise<Fo
     await client.query("begin");
     await setRlsUser(client, userId);
     const isPrivate = await ensureTarget(client, userId, targetId);
-
     const existing = await client.query(
       "select follower_id, following_id, status from follows where follower_id = $1 and following_id = $2 for update",
       [userId, targetId],
@@ -44,11 +35,7 @@ export async function toggleFollow(userId: string, targetId: string): Promise<Fo
 
     if (existing.rows[0]) {
       await client.query("delete from follows where follower_id = $1 and following_id = $2", [userId, targetId]);
-      await client.query(
-        `insert into events (user_id, type, weight)
-         values ($1, 'follow.removed', 1)`,
-        [userId],
-      );
+      await client.query("insert into events (user_id, type, weight) values ($1, 'follow.removed', 1)", [userId]);
       await client.query("commit");
       return null;
     }
@@ -60,36 +47,7 @@ export async function toggleFollow(userId: string, targetId: string): Promise<Fo
        returning follower_id, following_id, status`,
       [userId, targetId, status],
     );
-
-    await client.query(
-      `insert into events (user_id, type, weight)
-       values ($1, 'follow.created', 1)`,
-      [userId],
-    );
-
-    if (status === "accepted") {
-      await client.query(
-        `insert into user_affinity (user_id, target_user_id, score)
-         values ($1, $2, 0.5)
-         on conflict (user_id, target_user_id)
-         do update set score = greatest(user_affinity.score, 0.5), updated_at = now()`,
-        [userId, targetId],
-      );
-
-      await client.query(
-        `insert into notifications (recipient_id, actor_id, type, entity_type, entity_id, group_key)
-         values ($1, $2, 'follow', 'user', $2, 'follow:' || $2)
-         on conflict do nothing`,
-        [targetId, userId],
-      );
-    } else {
-      await client.query(
-        `insert into notifications (recipient_id, actor_id, type, entity_type, entity_id, group_key)
-         values ($1, $2, 'follow_request', 'user', $2, 'follow_request:' || $2)`,
-        [targetId, userId],
-      );
-    }
-
+    await client.query("insert into events (user_id, type, weight) values ($1, 'follow.created', 1)", [userId]);
     await client.query("commit");
     return rowToFollow(inserted.rows[0]);
   } catch (error) {
@@ -105,7 +63,6 @@ export async function acceptFollowRequest(userId: string, followerId: string): P
   try {
     await client.query("begin");
     await setRlsUser(client, userId);
-
     const result = await client.query(
       `update follows
        set status = 'accepted'
@@ -114,24 +71,7 @@ export async function acceptFollowRequest(userId: string, followerId: string): P
       [followerId, userId],
     );
     if (!result.rows[0]) throw new Error("follow_request_not_found");
-
-    await client.query(
-      `insert into user_affinity (user_id, target_user_id, score)
-       values ($1, $2, 0.5)
-       on conflict (user_id, target_user_id)
-       do update set score = greatest(user_affinity.score, 0.5), updated_at = now()`,
-      [followerId, userId],
-    );
-    await client.query(
-      `insert into events (user_id, type, weight) values ($1, 'follow.accepted', 1)`,
-      [userId],
-    );
-    await client.query(
-      `insert into notifications (recipient_id, actor_id, type, entity_type, entity_id, group_key)
-       values ($1, $2, 'follow_accepted', 'user', $1, 'follow_accepted:' || $1)`,
-      [followerId, userId],
-    );
-
+    await client.query("insert into events (user_id, type, weight) values ($1, 'follow.accepted', 1)", [userId]);
     await client.query("commit");
     return rowToFollow(result.rows[0]);
   } catch (error) {
@@ -171,10 +111,7 @@ export async function removeFollower(userId: string, followerId: string): Promis
       [followerId, userId],
     );
     if (!result.rows[0]) throw new Error("follow_not_found");
-    await client.query(
-      "insert into events (user_id, type, weight) values ($1, 'follow.removed', 1)",
-      [userId],
-    );
+    await client.query("insert into events (user_id, type, weight) values ($1, 'follow.removed', 1)", [userId]);
     await client.query("commit");
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
@@ -200,12 +137,7 @@ async function listUsers(userId: string, direction: "followers" | "following"): 
          order by f.created_at desc`;
     const result = await client.query(query, [userId]);
     await client.query("commit");
-    return result.rows.map((row) => ({
-      userId: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url ?? null,
-    }));
+    return result.rows.map((row) => ({ userId: row.id, username: row.username, displayName: row.display_name, avatarUrl: row.avatar_url ?? null }));
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
