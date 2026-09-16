@@ -29,7 +29,7 @@ router.patch("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, re
     return;
   }
   try {
-    res.json(await updatePost(req.userId!, req.params.postId, parsed.data));
+    res.json(await updatePost(req.userId!, String(req.params.postId), parsed.data));
   } catch (error) {
     if (error instanceof Error && error.message === "post_not_found") {
       res.status(404).json({ error: "post_not_found" });
@@ -39,9 +39,9 @@ router.patch("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, re
   }
 });
 
-router.delete("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, res) => {
+router.delete("/posts/:postId", requireAuth, async (req: AuthenticatedRequest, res: AuthenticatedRequest extends never ? never : any) => {
   try {
-    await deletePost(req.userId!, req.params.postId);
+    await deletePost(req.userId!, String(req.params.postId));
     res.status(204).send();
   } catch (error) {
     if (error instanceof Error && error.message === "post_not_found") {
