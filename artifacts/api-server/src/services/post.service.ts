@@ -1,5 +1,6 @@
 import { pool } from "@workspace/db";
-import type { CreatePostInput, UpdatePostInput, PostResponse } from "@workspace/api-zod";
+import type { CreatePostInput, UpdatePostInput } from "@workspace/api-zod";
+import { PostResponse } from "@workspace/api-zod";
 import { setRlsUser } from "@workspace/db";
 import { enqueuePostProcessingJob } from "./post-processing.service";
 
@@ -100,17 +101,7 @@ export async function createPost(userId: string, input: CreatePostInput): Promis
       await client.query(
         `insert into post_media (post_id, url, object_key, content_type, file_size, width, height, blurhash, position, status)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'processing')`,
-        [
-          postRow.id,
-          media.url,
-          media.objectKey,
-          media.contentType,
-          media.fileSize,
-          media.width ?? null,
-          media.height ?? null,
-          media.blurhash ?? null,
-          media.position,
-        ],
+        [postRow.id, media.url, media.objectKey, media.contentType, media.fileSize, media.width ?? null, media.height ?? null, media.blurhash ?? null, media.position],
       );
     }
     await initializePostMetadata(client, postRow.id, input.caption);
@@ -118,10 +109,7 @@ export async function createPost(userId: string, input: CreatePostInput): Promis
     await client.query(`insert into post_stats (post_id) values ($1) on conflict (post_id) do nothing`, [postRow.id]);
     await initializeDistribution(client, postRow.id, userId);
     await client.query(`insert into events (user_id, post_id, type, weight) values ($1, $2, 'post.created', 1)`, [userId, postRow.id]);
-    const mediaRows = await client.query(
-      `select id, url, width, height, blurhash, position, status from post_media where post_id = $1 order by position asc`,
-      [postRow.id],
-    );
+    const mediaRows = await client.query(`select id, url, width, height, blurhash, position, status from post_media where post_id = $1 order by position asc`, [postRow.id]);
     const fresh = await client.query(`select * from posts where id = $1`, [postRow.id]);
     await client.query("commit");
     return toPostResponse(fresh.rows[0], mediaRows.rows);
@@ -164,10 +152,7 @@ export async function deletePost(userId: string, postId: string): Promise<void> 
   try {
     await client.query("begin");
     await setRlsUser(client, userId);
-    const result = await client.query(
-      `update posts set deleted_at = now() where id = $1 and author_id = $2 and deleted_at is null returning id`,
-      [postId, userId],
-    );
+    const result = await client.query(`update posts set deleted_at = now() where id = $1 and author_id = $2 and deleted_at is null returning id`, [postId, userId]);
     if (!result.rows[0]) throw new Error("post_not_found");
     await client.query("commit");
   } catch (error) {
