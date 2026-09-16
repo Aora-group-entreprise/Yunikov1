@@ -10,7 +10,12 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  onConnect: async (client) => {
+    await client.query("set search_path to yunikov_v1, public");
+  },
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
