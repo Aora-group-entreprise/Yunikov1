@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 export type RegisterInput = {
   email: string;
   password: string;
@@ -13,35 +11,28 @@ export type AuthSession = {
   refreshToken: string;
 };
 
-/** Authentication provider boundary. Replace the provider calls here with the
- * managed auth implementation; route code remains provider-agnostic. */
-export async function registerUser(input: RegisterInput): Promise<AuthSession> {
-  if (!input.email || !input.password || !input.username) {
-    throw new Error("invalid_registration");
-  }
-
-  const userId = randomUUID();
-  return {
-    userId,
-    sessionId: randomUUID(),
-    accessToken: "",
-    refreshToken: "",
-  };
+/**
+ * Managed authentication boundary.
+ *
+ * Authentication is intentionally not faked here: until the managed auth
+ * provider is configured, these operations fail closed instead of returning
+ * synthetic users or empty tokens.
+ */
+export async function registerUser(
+  _input: RegisterInput,
+): Promise<AuthSession> {
+  throw new Error("managed_auth_not_configured");
 }
 
 export async function signIn(
-  identifier: string,
+  _identifier: string,
   _password: string,
 ): Promise<AuthSession> {
-  if (!identifier) throw new Error("invalid_credentials");
-  return {
-    userId: "",
-    sessionId: randomUUID(),
-    accessToken: "",
-    refreshToken: "",
-  };
+  throw new Error("managed_auth_not_configured");
 }
 
-export async function signOut(_scope: "current" | "all"): Promise<void> {
-  return undefined;
+export async function signOut(
+  _scope: "current" | "all",
+): Promise<void> {
+  throw new Error("managed_auth_not_configured");
 }
