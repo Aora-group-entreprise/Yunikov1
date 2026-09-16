@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
-import { pool, profiles } from "@workspace/db";
+import { db, pool, profiles, setRlsUser } from "@workspace/db";
 import type { UpdateProfileInput, ProfileResponse } from "@workspace/api-zod";
-import { setRlsUser } from "@workspace/db";
 
 function toProfileResponse(profile: typeof profiles.$inferSelect): ProfileResponse {
   return {
@@ -18,13 +17,8 @@ function toProfileResponse(profile: typeof profiles.$inferSelect): ProfileRespon
 }
 
 export async function getProfileByUsername(username: string): Promise<ProfileResponse | null> {
-  const [profile] = await dbSelectProfile(eq(profiles.username, username));
+  const [profile] = await db.select().from(profiles).where(eq(profiles.username, username)).limit(1);
   return profile ? toProfileResponse(profile) : null;
-}
-
-async function dbSelectProfile(condition: ReturnType<typeof eq>) {
-  const { db } = await import("@workspace/db");
-  return db.select().from(profiles).where(condition).limit(1);
 }
 
 export async function updateOwnProfile(userId: string, input: UpdateProfileInput): Promise<ProfileResponse> {
@@ -43,10 +37,24 @@ export async function updateOwnProfile(userId: string, input: UpdateProfileInput
 
     const keys = Object.keys(updates);
     if (keys.length === 0) {
-      const result = await client.query("select id, username, display_name, bio, avatar_url, is_private, country_code, follower_count, following_count from profiles where id = $1", [userId]);
+      const result = await client.query(
+        "select id, username, display_name, bio, avatar_url, is_private, country_code, follower_count, following_count from profiles where id = $1",
+        [userId],
+      );
       if (!result.rows[0]) throw new Error("profile_not_found");
       await client.query("commit");
-      return ProfileResponse.parse({ ...result.rows[0], bio: result.rows[0].bio ?? null, avatarUrl: result.rows[0].avatar_url ?? null, countryCode: result.rows[0].country_code ?? null });
+      const row = result.rows[0];
+      return ProfileResponse.parse({
+        id: row.id,
+        username: row.username,
+        displayName: row.display_name,
+        bio: row.bio ?? null,
+        avatarUrl: row.avatar_url ?? null,
+        isPrivate: row.is_private,
+        countryCode: row.country_code ?? null,
+        followerCount: row.follower_count,
+        followingCount: row.following_count,
+      });
     }
 
     const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(", ");
@@ -58,14 +66,17 @@ export async function updateOwnProfile(userId: string, input: UpdateProfileInput
 
     if (!result.rows[0]) throw new Error("profile_not_found");
     await client.query("commit");
-
+    const row = result.rows[0];
     return ProfileResponse.parse({
-      ...result.rows[0],
-      displayName: result.rows[0].display_name,
-      avatarUrl: result.rows[0].avatar_url ?? null,
-      countryCode: result.rows[0].country_code ?? null,
-      followerCount: result.rows[0].follower_count,
-      followingCount: result.rows[0].following_count,
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      bio: row.bio ?? null,
+      avatarUrl: row.avatar_url ?? null,
+      isPrivate: row.is_private,
+      countryCode: row.country_code ?? null,
+      followerCount: row.follower_count,
+      followingCount: row.following_count,
     });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
