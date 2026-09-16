@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import "./index.css";
 import { rankFeedPosts } from "./feedAlgorithm";
+import { MessagesPage, NotificationsPage } from "./socialInbox";
 
 const GRADIENT = "linear-gradient(135deg,#FF006E 0%,#8B00FF 100%)";
 const IMG = {
@@ -252,6 +253,14 @@ function Avatar({ user, size = "md", ring = false }: { user: DemoUser; size?: "s
 function Splash({ onDone }: { onDone: () => void }) {
   useEffect(() => { const timer = window.setTimeout(onDone, 1750); return () => window.clearTimeout(timer); }, [onDone]);
   return <motion.div className="fixed inset-0 z-[999] flex flex-col items-center justify-center gradient-bg" initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .35 }}><motion.div initial={{ scale: .7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: .55, ease: [0.34, 1.56, 0.64, 1] }} className="flex flex-col items-center gap-4"><div className="w-28 h-28 rounded-3xl bg-white/15 flex items-center justify-center shadow-2xl"><Sparkles size={50} className="text-white" strokeWidth={1.6} /></div><motion.span initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .22 }} className="text-white text-4xl font-black tracking-tight">Yuniko</motion.span><motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .48 }} className="mt-10 flex flex-col items-center gap-1"><span className="text-white/90 text-sm font-semibold tracking-wide">Aora Group</span><div className="flex gap-1.5 mt-3">{[0, 1, 2].map((i) => <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-white/75" animate={{ scale: [1, 1.4, 1], opacity: [.7, 1, .7] }} transition={{ repeat: Infinity, duration: .9, delay: i * .18 }} />)}</div></motion.div></motion.div></motion.div>;
+}
+
+function LocalMessagesRoute() {
+  const { activeUser } = useDemo();
+  return <MessagesPage currentUser={{ id: activeUser.id, username: activeUser.username, displayName: activeUser.displayName, avatar: activeUser.avatar }} />;
+}
+function LocalNotificationsRoute() {
+  return <NotificationsPage />;
 }
 
 function BottomNav() {
