@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
+import { pool } from "@workspace/db";
+import { verifyAccessToken } from "../services/auth.service";
 
-export type AuthenticatedRequest = Request & { userId?: string };
+export type AuthenticatedRequest = Request & { userId?: string; sessionId?: string };
 
 function readBearerToken(req: Request): string | null {
   const value = req.header("authorization");
@@ -9,24 +11,13 @@ function readBearerToken(req: Request): string | null {
   return match?.[1] ?? null;
 }
 
-/**
- * Phase 1 auth boundary.
- * The production JWT verifier is deliberately isolated here so route handlers
- * never make authentication decisions themselves.
- */
-export function requireAuth(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-): void {
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   const token = readBearerToken(req);
-  const userId = token ? process.env.AUTH_TEST_USER_ID : undefined;
-
-  if (!token || !userId) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
-
-  req.userId = userId;
+  const identity = token ? verifyAccessToken(token) : null;
+  if (!identity) { res.status(401).json({ error: "unauthorized" }); return; }
+  const result = await pool.query<{ user_id: string }>(`select user_id from yunikov_v1.auth_sessions where id=$1 and user_id=$2 and revoked_at is null and expires_at>now()`, [identity.sessionId, identity.userId]);
+  if (!result.rows[0]) { res.status(401).json({ error: "session_expired" }); return; }
+  req.userId = identity.userId;
+  req.sessionId = identity.sessionId;
   next();
 }
