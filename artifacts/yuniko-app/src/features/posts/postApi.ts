@@ -61,13 +61,30 @@ export async function uploadDirectly(upload: UploadDescriptor, file: File): Prom
   if (!response.ok) throw new Error(`upload_failed:${response.status}`);
 }
 
+async function uploadWithRetry(file: File, initialUpload: UploadDescriptor, maxAttempts = 3): Promise<UploadDescriptor> {
+  let upload = initialUpload;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await uploadDirectly(upload, file);
+      return upload;
+    } catch (error) {
+      if (attempt === maxAttempts) throw error;
+      // A retry gets a fresh signed URL so an expired/invalid URL does not strand the draft.
+      const [fresh] = await requestUploadUrls([file]);
+      upload = fresh;
+      await new Promise((resolve) => window.setTimeout(resolve, 250 * 2 ** (attempt - 1)));
+    }
+  }
+  throw new Error("upload_retry_exhausted");
+}
+
 export async function uploadPostMedia(media: PreparedMedia[]): Promise<CreatedPostMedia[]> {
   const uploads = await requestUploadUrls(media.map((item) => item.file));
-  const results = await Promise.all(
+  return Promise.all(
     media.map(async (item, index) => {
-      await uploadDirectly(uploads[index], item.file);
+      const completed = await uploadWithRetry(item.file, uploads[index]);
       return {
-        url: uploads[index].objectKey,
+        url: completed.objectKey,
         width: item.width,
         height: item.height,
         blurhash: item.blurhash,
@@ -75,7 +92,6 @@ export async function uploadPostMedia(media: PreparedMedia[]): Promise<CreatedPo
       } satisfies CreatedPostMedia;
     }),
   );
-  return results;
 }
 
 export async function createPost(input: CreatePostInput): Promise<unknown> {
