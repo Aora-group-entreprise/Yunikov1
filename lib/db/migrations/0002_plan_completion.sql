@@ -1,6 +1,6 @@
-create type post_status as enum ('draft', 'processing', 'ready', 'failed');
-
-alter table posts add column if not exists status post_status not null default 'ready';
+-- Yunikov1 base schema already defines post_status and the core UUID tables.
+-- This migration only adds the phase-1 completion objects that are not in 0000.
+alter table saves add column if not exists collection_id uuid;
 
 create table if not exists post_edits (
   id uuid primary key default gen_random_uuid(),
@@ -66,11 +66,19 @@ alter table post_hashtags enable row level security;
 alter table user_topic_affinity enable row level security;
 alter table notification_settings enable row level security;
 
+drop policy if exists post_edits_owner on post_edits;
 create policy post_edits_owner on post_edits for all using (editor_id = app_current_user_id()) with check (editor_id = app_current_user_id());
+drop policy if exists collections_owner on collections;
 create policy collections_owner on collections for all using (user_id = app_current_user_id()) with check (user_id = app_current_user_id());
+drop policy if exists hashtags_read on hashtags;
 create policy hashtags_read on hashtags for select using (true);
+drop policy if exists post_hashtags_read on post_hashtags;
 create policy post_hashtags_read on post_hashtags for select using (exists (select 1 from posts p where p.id = post_hashtags.post_id));
+drop policy if exists post_hashtags_author_write on post_hashtags;
 create policy post_hashtags_author_write on post_hashtags for all using (exists (select 1 from posts p where p.id = post_hashtags.post_id and p.author_id = app_current_user_id())) with check (exists (select 1 from posts p where p.id = post_hashtags.post_id and p.author_id = app_current_user_id()));
+drop policy if exists user_topic_affinity_self on user_topic_affinity;
 create policy user_topic_affinity_self on user_topic_affinity for select using (user_id = app_current_user_id());
+drop policy if exists user_topic_affinity_no_client_write on user_topic_affinity;
 create policy user_topic_affinity_no_client_write on user_topic_affinity for all using (false) with check (false);
+drop policy if exists notification_settings_self on notification_settings;
 create policy notification_settings_self on notification_settings for all using (user_id = app_current_user_id()) with check (user_id = app_current_user_id());
