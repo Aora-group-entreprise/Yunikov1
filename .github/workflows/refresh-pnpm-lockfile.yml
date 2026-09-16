@@ -1,5 +1,7 @@
 name: Refresh pnpm lockfile
 
+# Keep the lockfile synchronized after workspace dependency changes.
+
 on:
   push:
     branches: [main]
