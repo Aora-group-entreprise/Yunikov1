@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, pool, profiles, setRlsUser } from "@workspace/db";
-import type { UpdateProfileInput, ProfileResponse } from "@workspace/api-zod";
+import type { UpdateProfileInput } from "@workspace/api-zod";
+import { ProfileResponse } from "@workspace/api-zod";
 
 function toProfileResponse(profile: typeof profiles.$inferSelect): ProfileResponse {
   return {
@@ -37,23 +38,14 @@ export async function updateOwnProfile(userId: string, input: UpdateProfileInput
 
     const keys = Object.keys(updates);
     if (keys.length === 0) {
-      const result = await client.query(
-        "select id, username, display_name, bio, avatar_url, is_private, country_code, follower_count, following_count from profiles where id = $1",
-        [userId],
-      );
+      const result = await client.query("select id, username, display_name, bio, avatar_url, is_private, country_code, follower_count, following_count from profiles where id = $1", [userId]);
       if (!result.rows[0]) throw new Error("profile_not_found");
       await client.query("commit");
       const row = result.rows[0];
       return ProfileResponse.parse({
-        id: row.id,
-        username: row.username,
-        displayName: row.display_name,
-        bio: row.bio ?? null,
-        avatarUrl: row.avatar_url ?? null,
-        isPrivate: row.is_private,
-        countryCode: row.country_code ?? null,
-        followerCount: row.follower_count,
-        followingCount: row.following_count,
+        id: row.id, username: row.username, displayName: row.display_name, bio: row.bio ?? null,
+        avatarUrl: row.avatar_url ?? null, isPrivate: row.is_private, countryCode: row.country_code ?? null,
+        followerCount: row.follower_count, followingCount: row.following_count,
       });
     }
 
@@ -68,15 +60,9 @@ export async function updateOwnProfile(userId: string, input: UpdateProfileInput
     await client.query("commit");
     const row = result.rows[0];
     return ProfileResponse.parse({
-      id: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      bio: row.bio ?? null,
-      avatarUrl: row.avatar_url ?? null,
-      isPrivate: row.is_private,
-      countryCode: row.country_code ?? null,
-      followerCount: row.follower_count,
-      followingCount: row.following_count,
+      id: row.id, username: row.username, displayName: row.display_name, bio: row.bio ?? null,
+      avatarUrl: row.avatar_url ?? null, isPrivate: row.is_private, countryCode: row.country_code ?? null,
+      followerCount: row.follower_count, followingCount: row.following_count,
     });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
