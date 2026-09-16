@@ -10,7 +10,7 @@ begin
     perform cron.schedule(
       'yuniko-purge-deleted-posts',
       '0 3 * * *',
-      'select purge_deleted_posts_older_than_30_days();'
+      'select yunikov_v1.purge_deleted_posts_older_than_30_days();'
     );
   end if;
 end;
