@@ -2,3 +2,4 @@ export * from "./generated/api";
 export * from "./generated/types";
 export * from "./auth";
 export * from "./profile";
+export * from "./follow";
