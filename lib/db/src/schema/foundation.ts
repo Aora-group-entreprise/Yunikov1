@@ -1,0 +1,65 @@
+import { boolean, doublePrecision, integer, jsonb, pgEnum, pgTable, primaryKey, real, text, timestamp, uuid, varchar, index, uniqueIndex } from "drizzle-orm/pg-core";
+
+export const userStatus = pgEnum("user_status", ["active", "suspended", "deleted"]);
+export const followStatus = pgEnum("follow_status", ["pending", "accepted"]);
+export const postVisibility = pgEnum("post_visibility", ["public", "followers", "private"]);
+export const conversationType = pgEnum("conversation_type", ["dm", "group"]);
+export const eventType = pgEnum("event_type", ["auth.user.created","profile.created","auth.login.success","auth.login.failed","auth.login.new_device","follow.created","follow.accepted","follow.removed","post.created","like.created","like.removed","comment.created","save.created","share.created","story.created","story.viewed","message.created","message.read","search.performed","report.created","not_interested"]);
+
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(), email: varchar("email", { length: 320 }).notNull(), phone: varchar("phone", { length: 32 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), status: userStatus("status").default("active").notNull(),
+}, t => [uniqueIndex("users_email_uq").on(t.email)]);
+
+export const profiles = pgTable("profiles", {
+  id: uuid("id").primaryKey().references(() => users.id, { onDelete: "cascade" }), username: varchar("username", { length: 32 }).notNull(), displayName: varchar("display_name", { length: 80 }).notNull(), bio: varchar("bio", { length: 500 }), avatarUrl: text("avatar_url"), isPrivate: boolean("is_private").default(false).notNull(), countryCode: varchar("country_code", { length: 2 }), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), searchVector: text("search_vector"), followerCount: integer("follower_count").default(0).notNull(), followingCount: integer("following_count").default(0).notNull(),
+}, t => [uniqueIndex("profiles_username_uq").on(t.username), index("profiles_country_idx").on(t.countryCode)]);
+
+export const follows = pgTable("follows", {
+  followerId: uuid("follower_id").notNull().references(() => users.id, { onDelete: "cascade" }), followingId: uuid("following_id").notNull().references(() => users.id, { onDelete: "cascade" }), status: followStatus("status").default("accepted").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.followerId, t.followingId] }), index("follows_following_idx").on(t.followingId)]);
+
+export const blocks = pgTable("blocks", {
+  blockerId: uuid("blocker_id").notNull().references(() => users.id, { onDelete: "cascade" }), blockedId: uuid("blocked_id").notNull().references(() => users.id, { onDelete: "cascade" }), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.blockerId, t.blockedId] })]);
+
+export const posts = pgTable("posts", {
+  id: uuid("id").defaultRandom().primaryKey(), authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }), caption: text("caption"), visibility: postVisibility("visibility").default("public").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), deletedAt: timestamp("deleted_at", { withTimezone: true }), likeCount: integer("like_count").default(0).notNull(), commentCount: integer("comment_count").default(0).notNull(), saveCount: integer("save_count").default(0).notNull(), shareCount: integer("share_count").default(0).notNull(), viewCount: integer("view_count").default(0).notNull(),
+}, t => [index("posts_author_created_idx").on(t.authorId, t.createdAt)]);
+
+export const postMedia = pgTable("post_media", {
+  id: uuid("id").defaultRandom().primaryKey(), postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }), url: text("url").notNull(), width: integer("width"), height: integer("height"), blurhash: varchar("blurhash", { length: 128 }), position: integer("position").default(0).notNull(), status: varchar("status", { length: 16 }).default("ready").notNull(),
+});
+
+export const likes = pgTable("likes", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.postId] }), index("likes_post_idx").on(t.postId)]);
+
+export const comments = pgTable("comments", {
+  id: uuid("id").defaultRandom().primaryKey(), postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }), authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }), parentId: uuid("parent_id"), body: text("body").notNull(), likeCount: integer("like_count").default(0).notNull(), replyCount: integer("reply_count").default(0).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, t => [index("comments_post_created_idx").on(t.postId, t.createdAt)]);
+
+export const saves = pgTable("saves", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }), collectionId: uuid("collection_id"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.postId] })]);
+
+export const shares = pgTable("shares", { id: uuid("id").defaultRandom().primaryKey(), postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }), userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), channel: varchar("channel", { length: 32 }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull() });
+
+export const stories = pgTable("stories", { id: uuid("id").defaultRandom().primaryKey(), authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }), mediaUrl: text("media_url").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), visibility: postVisibility("visibility").default("public").notNull() });
+export const storyViews = pgTable("story_views", { storyId: uuid("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }), viewerId: uuid("viewer_id").notNull().references(() => users.id, { onDelete: "cascade" }), viewedAt: timestamp("viewed_at", { withTimezone: true }).defaultNow().notNull() }, t => [primaryKey({ columns: [t.storyId, t.viewerId] })]);
+
+export const conversations = pgTable("conversations", { id: uuid("id").defaultRandom().primaryKey(), type: conversationType("type").default("dm").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), lastMessageAt: timestamp("last_message_at", { withTimezone: true }) });
+export const conversationMembers = pgTable("conversation_members", { conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }), userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), role: varchar("role", { length: 16 }).default("member").notNull(), joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(), lastReadMessageId: uuid("last_read_message_id"), isArchived: boolean("is_archived").default(false).notNull(), isRequest: boolean("is_request").default(false).notNull() }, t => [primaryKey({ columns: [t.conversationId, t.userId] }), index("conversation_members_user_idx").on(t.userId)]);
+export const messages = pgTable("messages", { id: uuid("id").primaryKey(), conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }), senderId: uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }), body: text("body"), mediaUrl: text("media_url"), replyToId: uuid("reply_to_id"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), deletedAt: timestamp("deleted_at", { withTimezone: true }) }, t => [index("messages_conversation_created_idx").on(t.conversationId, t.createdAt)]);
+
+export const notifications = pgTable("notifications", { id: uuid("id").defaultRandom().primaryKey(), recipientId: uuid("recipient_id").notNull().references(() => users.id, { onDelete: "cascade" }), actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }), type: varchar("type", { length: 48 }).notNull(), entityType: varchar("entity_type", { length: 32 }), entityId: uuid("entity_id"), groupKey: varchar("group_key", { length: 160 }), count: integer("count").default(1).notNull(), isRead: boolean("is_read").default(false).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull() }, t => [index("notifications_recipient_created_idx").on(t.recipientId, t.createdAt)]);
+
+export const events = pgTable("events", { id: uuid("id").defaultRandom().primaryKey(), userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }), postId: uuid("post_id").references(() => posts.id, { onDelete: "set null" }), type: eventType("type").notNull(), weight: real("weight").default(1).notNull(), countryCode: varchar("country_code", { length: 2 }), sessionId: uuid("session_id"), dwellMs: integer("dwell_ms"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull() }, t => [index("events_post_created_idx").on(t.postId, t.createdAt), index("events_user_created_idx").on(t.userId, t.createdAt)]);
+
+export const postStats = pgTable("post_stats", { postId: uuid("post_id").primaryKey().references(() => posts.id, { onDelete: "cascade" }), impressions: integer("impressions").default(0).notNull(), likes: integer("likes").default(0).notNull(), comments: integer("comments").default(0).notNull(), saves: integer("saves").default(0).notNull(), shares: integer("shares").default(0).notNull(), completionRate: real("completion_rate").default(0).notNull(), score: doublePrecision("score").default(0).notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull() });
+export const postDistribution = pgTable("post_distribution", { postId: uuid("post_id").primaryKey().references(() => posts.id, { onDelete: "cascade" }), stage: integer("stage").default(1).notNull(), countries: jsonb("countries").$type<string[]>().default([]).notNull(), lastEvalAt: timestamp("last_eval_at", { withTimezone: true }), impressionsAtStage: integer("impressions_at_stage").default(0).notNull(), engagementRate: real("engagement_rate").default(0).notNull(), velocity: real("velocity").default(0).notNull(), status: varchar("status", { length: 16 }).default("active").notNull(), secondChanceUsed: boolean("second_chance_used").default(false).notNull() });
+
+export const userAffinity = pgTable("user_affinity", { userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), targetUserId: uuid("target_user_id").notNull().references(() => users.id, { onDelete: "cascade" }), score: real("score").default(0).notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull() }, t => [primaryKey({ columns: [t.userId, t.targetUserId] })]);
+export const seenPosts = pgTable("seen_posts", { userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), postId: uuid("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }), seenAt: timestamp("seen_at", { withTimezone: true }).defaultNow().notNull() }, t => [primaryKey({ columns: [t.userId, t.postId] }), index("seen_posts_user_seen_idx").on(t.userId, t.seenAt)]);
+export const reports = pgTable("reports", { id: uuid("id").defaultRandom().primaryKey(), reporterId: uuid("reporter_id").notNull().references(() => users.id, { onDelete: "cascade" }), entityType: varchar("entity_type", { length: 32 }).notNull(), entityId: uuid("entity_id").notNull(), reason: varchar("reason", { length: 64 }).notNull(), status: varchar("status", { length: 16 }).default("pending").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull() });
+export const loginEvents = pgTable("login_events", { id: uuid("id").defaultRandom().primaryKey(), userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }), ip: varchar("ip", { length: 64 }), userAgent: text("user_agent"), country: varchar("country", { length: 2 }), isNewDevice: boolean("is_new_device").default(false).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull() });
