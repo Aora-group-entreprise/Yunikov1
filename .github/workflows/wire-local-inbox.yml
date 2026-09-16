@@ -1,0 +1,58 @@
+name: Wire Local Messages and Notifications
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wire existing frontend-only App
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('artifacts/yuniko-app/src/App.tsx')
+          text = p.read_text()
+          if 'from "./socialInbox"' not in text:
+              anchor = 'import { rankFeedPosts } from "./feedAlgorithm";'
+              if anchor not in text:
+                  raise SystemExit('Stopping safely: feed integration anchor is missing.')
+              text = text.replace(anchor, anchor + '\nimport { MessagesPage, NotificationsPage } from "./socialInbox";', 1)
+          if 'function LocalMessagesRoute' not in text:
+              anchor = 'function BottomNav() {'
+              if anchor not in text:
+                  raise SystemExit('Stopping safely: BottomNav anchor is missing.')
+              helpers = '''function LocalMessagesRoute() {\n  const { activeUser } = useDemo();\n  return <MessagesPage currentUser={{ id: activeUser.id, username: activeUser.username, displayName: activeUser.displayName, avatar: activeUser.avatar }} />;\n}\nfunction LocalNotificationsRoute() {\n  return <NotificationsPage />;\n}\n\n'''
+              text = text.replace(anchor, helpers + anchor, 1)
+          if 'path="/messages"' not in text or 'path="/notifications"' not in text:
+              marker = '</Switch>'
+              if marker not in text:
+                  raise SystemExit('Stopping safely: Router Switch anchor is missing.')
+              routes = '''      <Route path="/messages"><LocalMessagesRoute /></Route>\n      <Route path="/notifications"><LocalNotificationsRoute /></Route>\n'''
+              text = text.replace(marker, routes + '    </Switch>', 1)
+          p.write_text(text)
+
+      - name: Build Yuniko
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.11.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @workspace/yuniko-app run build
+
+      - name: Commit only after build passes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/yuniko-app/src/App.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: wire local messages and notifications"
+          git push
