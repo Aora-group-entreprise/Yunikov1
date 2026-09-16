@@ -1,6 +1,7 @@
 import { pool } from "@workspace/db";
 import type { CreatePostInput, UpdatePostInput, PostResponse } from "@workspace/api-zod";
 import { setRlsUser } from "@workspace/db";
+import { enqueuePostProcessingJob } from "./post-processing.service";
 
 function extractHashtags(text: string | null | undefined): string[] {
   if (!text) return [];
@@ -98,12 +99,12 @@ export async function createPost(userId: string, input: CreatePostInput): Promis
     for (const media of input.media) {
       await client.query(
         `insert into post_media (post_id, url, width, height, blurhash, position, status)
-         values ($1, $2, $3, $4, $5, $6, 'ready')`,
+         values ($1, $2, $3, $4, $5, $6, 'processing')`,
         [postRow.id, media.url, media.width ?? null, media.height ?? null, media.blurhash ?? null, media.position],
       );
     }
     await initializePostMetadata(client, postRow.id, input.caption);
-    await client.query(`update posts set status = 'ready' where id = $1`, [postRow.id]);
+    await enqueuePostProcessingJob(client, postRow.id);
     await client.query(`insert into post_stats (post_id) values ($1) on conflict (post_id) do nothing`, [postRow.id]);
     await initializeDistribution(client, postRow.id, userId);
     await client.query(`insert into events (user_id, post_id, type, weight) values ($1, $2, 'post.created', 1)`, [userId, postRow.id]);
