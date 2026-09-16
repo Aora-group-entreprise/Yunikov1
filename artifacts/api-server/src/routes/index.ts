@@ -1,16 +1,16 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
 import profileRouter from "./profile";
 import followRouter from "./follow";
 import postRouter from "./post";
 import postUploadRouter from "./post-upload";
 
 const router: IRouter = Router();
-
 router.use(healthRouter);
+router.use(authRouter);
 router.use(profileRouter);
 router.use(followRouter);
 router.use(postRouter);
 router.use(postUploadRouter);
-
 export default router;
