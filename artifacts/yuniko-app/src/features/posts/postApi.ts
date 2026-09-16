@@ -4,6 +4,7 @@ export type UploadDescriptor = {
   uploadId: string;
   uploadUrl: string;
   objectKey: string;
+  publicUrl: string;
   expiresAt: string;
 };
 
@@ -69,7 +70,6 @@ async function uploadWithRetry(file: File, initialUpload: UploadDescriptor, maxA
       return upload;
     } catch (error) {
       if (attempt === maxAttempts) throw error;
-      // A retry gets a fresh signed URL so an expired/invalid URL does not strand the draft.
       const [fresh] = await requestUploadUrls([file]);
       upload = fresh;
       await new Promise((resolve) => window.setTimeout(resolve, 250 * 2 ** (attempt - 1)));
@@ -84,7 +84,7 @@ export async function uploadPostMedia(media: PreparedMedia[]): Promise<CreatedPo
     media.map(async (item, index) => {
       const completed = await uploadWithRetry(item.file, uploads[index]);
       return {
-        url: completed.objectKey,
+        url: completed.publicUrl,
         width: item.width,
         height: item.height,
         blurhash: item.blurhash,
