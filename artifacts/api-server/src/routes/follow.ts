@@ -45,7 +45,7 @@ router.post("/me/follows", requireAuth, async (req: AuthenticatedRequest, res, n
 
 router.post("/me/follow-requests/:followerId/accept", requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const result = await acceptFollowRequest(requireUser(req), req.params.followerId);
+    const result = await acceptFollowRequest(requireUser(req), String(req.params.followerId));
     res.json(result);
   } catch (error) {
     if (error instanceof Error && error.message === "follow_request_not_found") {
@@ -58,7 +58,7 @@ router.post("/me/follow-requests/:followerId/accept", requireAuth, async (req: A
 
 router.post("/me/follow-requests/:followerId/reject", requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    await rejectFollowRequest(requireUser(req), req.params.followerId);
+    await rejectFollowRequest(requireUser(req), String(req.params.followerId));
     res.status(204).end();
   } catch (error) {
     if (error instanceof Error && error.message === "follow_request_not_found") {
@@ -71,7 +71,7 @@ router.post("/me/follow-requests/:followerId/reject", requireAuth, async (req: A
 
 router.delete("/me/followers/:followerId", requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    await removeFollower(requireUser(req), req.params.followerId);
+    await removeFollower(requireUser(req), String(req.params.followerId));
     res.status(204).end();
   } catch (error) {
     if (error instanceof Error && error.message === "follow_not_found") {
