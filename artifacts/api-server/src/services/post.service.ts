@@ -97,16 +97,15 @@ export async function createPost(userId: string, input: CreatePostInput): Promis
     );
     const postRow = post.rows[0];
     for (const media of input.media) {
-      const objectKey = new URL(media.url).pathname.replace(/^\//, "").split("/").map(decodeURIComponent).join("/");
       await client.query(
         `insert into post_media (post_id, url, object_key, content_type, file_size, width, height, blurhash, position, status)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'processing')`,
         [
           postRow.id,
           media.url,
-          objectKey,
-          null,
-          null,
+          media.objectKey,
+          media.contentType,
+          media.fileSize,
           media.width ?? null,
           media.height ?? null,
           media.blurhash ?? null,
