@@ -8,6 +8,7 @@ import postUploadRouter from "./post-upload";
 import messagingRouter from "./messaging";
 import storiesRouter from "./stories";
 import realtimeRouter from "./realtime";
+import moderationRouter from "./moderation";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -19,4 +20,5 @@ router.use(postUploadRouter);
 router.use(messagingRouter);
 router.use(storiesRouter);
 router.use(realtimeRouter);
+router.use(moderationRouter);
 export default router;
