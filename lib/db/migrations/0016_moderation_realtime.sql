@@ -43,11 +43,11 @@ alter table yunikov_v1.reports enable row level security;
 drop policy if exists reports_owner_read on yunikov_v1.reports;
 create policy reports_owner_read on yunikov_v1.reports
 for select to authenticated
-using (reporter_id = yunikov_v1.app_current_user_id());
+using (reporter_id = public.app_current_user_id());
 drop policy if exists reports_owner_insert on yunikov_v1.reports;
 create policy reports_owner_insert on yunikov_v1.reports
 for insert to authenticated
-with check (reporter_id = yunikov_v1.app_current_user_id());
+with check (reporter_id = public.app_current_user_id());
 drop policy if exists reports_no_client_update on yunikov_v1.reports;
 create policy reports_no_client_update on yunikov_v1.reports
 for update to authenticated using (false) with check (false);
@@ -60,15 +60,15 @@ alter table yunikov_v1.blocks enable row level security;
 drop policy if exists blocks_self_read on yunikov_v1.blocks;
 create policy blocks_self_read on yunikov_v1.blocks
 for select to authenticated
-using (blocker_id = yunikov_v1.app_current_user_id() or blocked_id = yunikov_v1.app_current_user_id());
+using (blocker_id = public.app_current_user_id() or blocked_id = public.app_current_user_id());
 drop policy if exists blocks_self_insert on yunikov_v1.blocks;
 create policy blocks_self_insert on yunikov_v1.blocks
 for insert to authenticated
-with check (blocker_id = yunikov_v1.app_current_user_id() and blocked_id <> yunikov_v1.app_current_user_id());
+with check (blocker_id = public.app_current_user_id() and blocked_id <> public.app_current_user_id());
 drop policy if exists blocks_self_delete on yunikov_v1.blocks;
 create policy blocks_self_delete on yunikov_v1.blocks
 for delete to authenticated
-using (blocker_id = yunikov_v1.app_current_user_id());
+using (blocker_id = public.app_current_user_id());
 
 create or replace function yunikov_v1.is_blocked(a uuid, b uuid)
 returns boolean
@@ -96,7 +96,7 @@ security definer
 set search_path = yunikov_v1, pg_catalog
 as $$
 declare
-  uid uuid := yunikov_v1.app_current_user_id();
+  uid uuid := public.app_current_user_id();
   row_value yunikov_v1.user_rate_limits;
 begin
   if uid is null or p_limit <= 0 or p_window_seconds <= 0 then
@@ -279,3 +279,91 @@ for each row execute function yunikov_v1.notify_unified_realtime();
 
 -- Keep the realtime function callable only by the database trigger mechanism.
 revoke all on function yunikov_v1.notify_unified_realtime() from public;
+
+
+-- Close direct-query privacy gaps created by old broad read policies.
+drop policy if exists profiles_public_read on yunikov_v1.profiles;
+create policy profiles_public_read on yunikov_v1.profiles
+for select to authenticated
+using (
+  (not is_private or id = public.app_current_user_id() or exists (
+    select 1 from yunikov_v1.follows f
+    where f.follower_id = public.app_current_user_id()
+      and f.following_id = profiles.id
+      and f.status = 'accepted'
+  ))
+  and not yunikov_v1.is_blocked(public.app_current_user_id(), id)
+);
+
+drop policy if exists follows_read on yunikov_v1.follows;
+create policy follows_read on yunikov_v1.follows
+for select to authenticated
+using (
+  (follower_id = public.app_current_user_id() or following_id = public.app_current_user_id())
+  and not yunikov_v1.is_blocked(public.app_current_user_id(), follower_id)
+  and not yunikov_v1.is_blocked(public.app_current_user_id(), following_id)
+);
+
+drop policy if exists post_media_read on yunikov_v1.post_media;
+create policy post_media_read on yunikov_v1.post_media
+for select to authenticated
+using (
+  exists (
+    select 1 from yunikov_v1.posts p
+    where p.id = post_media.post_id
+      and not yunikov_v1.is_blocked(public.app_current_user_id(), p.author_id)
+      and (
+        p.author_id = public.app_current_user_id()
+        or p.visibility = 'public'
+        or (p.visibility = 'followers' and exists (
+          select 1 from yunikov_v1.follows f
+          where f.follower_id = public.app_current_user_id()
+            and f.following_id = p.author_id
+            and f.status = 'accepted'
+        ))
+      )
+      and p.deleted_at is null
+  )
+);
+
+drop policy if exists comments_read on yunikov_v1.comments;
+create policy comments_read on yunikov_v1.comments
+for select to authenticated
+using (
+  exists (
+    select 1 from yunikov_v1.posts p
+    where p.id = comments.post_id
+      and not yunikov_v1.is_blocked(public.app_current_user_id(), p.author_id)
+      and not yunikov_v1.is_blocked(public.app_current_user_id(), comments.author_id)
+  )
+);
+
+drop policy if exists stories_read on yunikov_v1.stories;
+create policy stories_read on yunikov_v1.stories
+for select to authenticated
+using (
+  expires_at > now()
+  and not yunikov_v1.is_blocked(public.app_current_user_id(), author_id)
+  and (
+    author_id = public.app_current_user_id()
+    or visibility = 'public'
+    or exists (
+      select 1 from yunikov_v1.follows f
+      where f.follower_id = public.app_current_user_id()
+        and f.following_id = stories.author_id
+        and f.status = 'accepted'
+    )
+  )
+);
+
+drop policy if exists notifications_recipient on yunikov_v1.notifications;
+create policy notifications_recipient on yunikov_v1.notifications
+for select to authenticated
+using (
+  recipient_id = public.app_current_user_id()
+  and (actor_id is null or not yunikov_v1.is_blocked(public.app_current_user_id(), actor_id))
+);
+
+-- The block relation is also a feed/recommendation boundary.
+create index if not exists blocks_blocker_blocked_idx
+  on yunikov_v1.blocks(blocker_id, blocked_id);
