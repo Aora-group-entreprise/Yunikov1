@@ -76,14 +76,14 @@ language sql
 stable
 security invoker
 set search_path = yunikov_v1, pg_catalog
-as $
+as $func$
   select exists (
     select 1
     from yunikov_v1.blocks
     where (blocker_id = a and blocked_id = b)
        or (blocker_id = b and blocked_id = a)
   );
-$$;
+$func$;
 
 -- Atomic user-scoped rate limiter. Returns true when the operation is allowed.
 create or replace function yunikov_v1.check_rate_limit(
