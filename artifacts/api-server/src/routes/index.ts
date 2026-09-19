@@ -6,6 +6,7 @@ import followRouter from "./follow";
 import postRouter from "./post";
 import postUploadRouter from "./post-upload";
 import messagingRouter from "./messaging";
+import storiesRouter from "./stories";
 
 const router: IRouter = Router();
 router.use(healthRouter);
@@ -15,4 +16,5 @@ router.use(followRouter);
 router.use(postRouter);
 router.use(postUploadRouter);
 router.use(messagingRouter);
+router.use(storiesRouter);
 export default router;
