@@ -1,0 +1,11 @@
+export type Story={id:string;author_id:string;username:string;display_name:string;avatar_url:string|null;media_url:string;caption:string|null;media_type:string|null;media_width:number|null;media_height:number|null;created_at:string;expires_at:string;visibility:string;viewed:boolean;affinity:number};
+const API=(import.meta.env.VITE_API_BASE_URL as string|undefined)?.replace(/\/$/,"")??"/api";
+async function json<T>(r:Response):Promise<T>{const b=await r.json().catch(()=>null);if(!r.ok)throw new Error(typeof b?.error==="string"?b.error:"api_request_failed");return b as T;}
+export const listStories=()=>fetch(API+"/stories",{credentials:"include"}).then(r=>json<Story[]>(r));
+export const requestStoryUpload=(file:File)=>fetch(API+"/stories/upload-url",{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({name:file.name,contentType:file.type,size:file.size})}).then(r=>json<{uploadUrl:string;publicUrl:string;objectKey:string;expiresAt:string}>(r));
+export async function uploadStory(file:File){const u=await requestStoryUpload(file);const put=await fetch(u.uploadUrl,{method:"PUT",headers:{"content-type":file.type},body:file});if(!put.ok)throw new Error("story_upload_failed");return u;}
+export const createStory=(input:{mediaUrl:string;caption?:string|null;visibility?:"public"|"followers"|"private";mediaType?:string;width?:number;height?:number})=>fetch(API+"/stories",{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify(input)}).then(r=>json<Story>(r));
+export const viewStory=(storyId:string)=>fetch(API+"/stories/"+encodeURIComponent(storyId)+"/view",{method:"POST",credentials:"include"}).then(r=>json<{inserted:boolean}>(r));
+export const storyViews=(storyId:string)=>fetch(API+"/stories/"+encodeURIComponent(storyId)+"/views",{credentials:"include"}).then(r=>json(r));
+export const deleteStory=(storyId:string)=>fetch(API+"/stories/"+encodeURIComponent(storyId),{method:"DELETE",credentials:"include"}).then(r=>{if(!r.ok)throw new Error("story_delete_failed");});
+export const replyToStory=(storyId:string,body:string)=>fetch(API+"/stories/"+encodeURIComponent(storyId)+"/replies",{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({body})}).then(r=>json(r));
