@@ -144,7 +144,7 @@ returns trigger
 language plpgsql
 security invoker
 set search_path = yunikov_v1, pg_catalog
-as $
+as $fn$
 declare
   payload json;
   member_row record;
@@ -235,7 +235,7 @@ begin
 
   return coalesce(new, old);
 end;
-$$;
+$fn$;
 
 drop trigger if exists trg_unified_realtime_messages on yunikov_v1.messages;
 create trigger trg_unified_realtime_messages after insert or update or delete on yunikov_v1.messages
