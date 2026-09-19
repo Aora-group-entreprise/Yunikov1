@@ -1,0 +1,14 @@
+import { Router, type IRouter } from "express";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
+import { requestStoryUploadUrl,createStory,listStories,viewStory,getStoryViews,deleteStory,replyToStory } from "../services/story.service";
+const router: IRouter=Router();
+function uid(req:AuthenticatedRequest){if(!req.userId)throw new Error("unauthorized");return req.userId;}
+function fail(error:unknown,res:any,next:any){if(error instanceof Error){const map:Record<string,number>={unauthorized:401,story_storage_not_configured:503,media_too_large:413,unsupported_story_media:415,story_not_found:404,cannot_reply_own_story:400};const s=map[error.message];if(s){res.status(s).json({error:error.message});return;}}next(error);}
+router.post("/stories/upload-url",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{const b=req.body??{};if(!b.name||!b.contentType||!Number.isFinite(Number(b.size))){res.status(400).json({error:"invalid_story_upload"});return;}res.json(await requestStoryUploadUrl(uid(req),{name:String(b.name),contentType:String(b.contentType),size:Number(b.size)}));}catch(e){fail(e,res,next);}});
+router.post("/stories",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{const b=req.body??{};if(!b.mediaUrl){res.status(400).json({error:"story_media_required"});return;}res.status(201).json(await createStory(uid(req),{mediaUrl:String(b.mediaUrl),caption:b.caption==null?null:String(b.caption),visibility:b.visibility,mediaType:b.mediaType==null?null:String(b.mediaType),width:b.width==null?null:Number(b.width),height:b.height==null?null:Number(b.height)}));}catch(e){fail(e,res,next);}});
+router.get("/stories",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{res.json(await listStories(uid(req)));}catch(e){fail(e,res,next);}});
+router.post("/stories/:storyId/view",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{res.json({inserted:await viewStory(uid(req),String(req.params.storyId))});}catch(e){fail(e,res,next);}});
+router.get("/stories/:storyId/views",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{res.json(await getStoryViews(uid(req),String(req.params.storyId)));}catch(e){fail(e,res,next);}});
+router.delete("/stories/:storyId",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{if(!await deleteStory(uid(req),String(req.params.storyId))){res.status(404).json({error:"story_not_found"});return;}res.status(204).end();}catch(e){fail(e,res,next);}});
+router.post("/stories/:storyId/replies",requireAuth,async(req:AuthenticatedRequest,res,next)=>{try{const body=String(req.body?.body??"").trim();if(!body){res.status(400).json({error:"reply_body_required"});return;}res.status(201).json(await replyToStory(uid(req),String(req.params.storyId),body));}catch(e){fail(e,res,next);}});
+export default router;
