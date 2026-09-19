@@ -155,7 +155,7 @@ begin
     loop
       payload := json_build_object(
         'type', case when tg_op = 'DELETE' then 'message.deleted' else 'message.changed' end,
-        'target_user_id', member_row.user_id,
+        'target_user_id', target,
         'conversation_id', coalesce(new.conversation_id, old.conversation_id),
         'message_id', coalesce(new.id, old.id)
       );
@@ -191,7 +191,7 @@ begin
     else target := coalesce(new.post_id, old.post_id);
     end if;
 
-    select p.author_id into member_row
+    select p.author_id into target
     from yunikov_v1.posts p
     where p.id = target;
 
