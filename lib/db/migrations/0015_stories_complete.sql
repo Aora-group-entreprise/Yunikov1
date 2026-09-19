@@ -149,19 +149,39 @@ create or replace function yunikov_v1.notify_story_change()
 returns trigger
 language plpgsql
 security invoker
-as $$
+as $
+declare
+  story_id_value uuid;
+  author_id_value uuid;
 begin
-  perform pg_notify(
-    'yuniko_story_events',
-    json_build_object(
-      'story_id', coalesce(new.id, old.id),
-      'author_id', coalesce(new.author_id, old.author_id),
-      'type', case when tg_op = 'DELETE' then 'story.deleted' else 'story.changed' end
-    )::text
-  );
+  if tg_table_name = 'story_views' then
+    story_id_value := new.story_id;
+    select s.author_id into author_id_value
+    from yunikov_v1.stories s
+    where s.id = story_id_value;
+    perform pg_notify(
+      'yuniko_story_events',
+      json_build_object(
+        'story_id', story_id_value,
+        'author_id', author_id_value,
+        'type', 'story.viewed'
+      )::text
+    );
+  else
+    story_id_value := coalesce(new.id, old.id);
+    author_id_value := coalesce(new.author_id, old.author_id);
+    perform pg_notify(
+      'yuniko_story_events',
+      json_build_object(
+        'story_id', story_id_value,
+        'author_id', author_id_value,
+        'type', case when tg_op = 'DELETE' then 'story.deleted' else 'story.changed' end
+      )::text
+    );
+  end if;
   return coalesce(new, old);
 end;
-$$;
+$;
 
 drop trigger if exists trg_story_realtime on yunikov_v1.stories;
 create trigger trg_story_realtime
