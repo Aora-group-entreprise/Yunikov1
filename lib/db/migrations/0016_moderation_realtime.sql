@@ -147,6 +147,8 @@ declare
   payload json;
   member_row record;
   target uuid;
+  post_id_value uuid;
+  author_id uuid;
 begin
   if tg_table_name = 'messages' then
     for member_row in
@@ -155,7 +157,7 @@ begin
     loop
       payload := json_build_object(
         'type', case when tg_op = 'DELETE' then 'message.deleted' else 'message.changed' end,
-        'target_user_id', target,
+        'target_user_id', member_row.user_id,
         'conversation_id', coalesce(new.conversation_id, old.conversation_id),
         'message_id', coalesce(new.id, old.id)
       );
@@ -185,23 +187,23 @@ begin
   end if;
 
   if tg_table_name in ('likes','comments','saves','shares') then
-    if tg_table_name = 'likes' then target := coalesce(new.post_id, old.post_id);
-    elsif tg_table_name = 'comments' then target := coalesce(new.post_id, old.post_id);
-    elsif tg_table_name = 'saves' then target := coalesce(new.post_id, old.post_id);
-    else target := coalesce(new.post_id, old.post_id);
+    if tg_table_name = 'likes' then post_id_value := coalesce(new.post_id, old.post_id);
+    elsif tg_table_name = 'comments' then post_id_value := coalesce(new.post_id, old.post_id);
+    elsif tg_table_name = 'saves' then post_id_value := coalesce(new.post_id, old.post_id);
+    else post_id_value := coalesce(new.post_id, old.post_id);
     end if;
 
-    select p.author_id into target
+    select p.author_id into author_id
     from yunikov_v1.posts p
-    where p.id = target;
+    where p.id = post_id_value;
 
     payload := json_build_object(
       'type', tg_table_name || '.changed',
-      'target_user_id', member_row.user_id,
-      'post_id', target
+      'target_user_id', author_id,
+      'post_id', post_id_value
     );
     perform pg_notify('yuniko_realtime_events', payload::text);
-    perform pg_notify('yuniko_realtime_events', json_build_object('type','feed.invalidate','post_id',target)::text);
+    perform pg_notify('yuniko_realtime_events', json_build_object('type','feed.invalidate','post_id',post_id_value)::text);
     return coalesce(new, old);
   end if;
 
