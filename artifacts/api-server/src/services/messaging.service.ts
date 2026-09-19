@@ -50,7 +50,7 @@ export async function createDirectConversation(userId: string, targetUserId: str
     const follows = await client.query(
       `select exists (
         select 1 from follows
-        where follower_id = $1 and following_id = $2 and status = 'accepted'
+        where follower_id = $2 and following_id = $1 and status = 'accepted'
       ) as connected`,
       [userId, targetUserId],
     );
