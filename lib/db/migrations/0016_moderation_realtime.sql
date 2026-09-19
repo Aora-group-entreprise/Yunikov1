@@ -75,7 +75,8 @@ returns boolean
 language sql
 stable
 security invoker
-as $$
+set search_path = yunikov_v1, pg_catalog
+as $
   select exists (
     select 1
     from yunikov_v1.blocks
@@ -142,7 +143,8 @@ create or replace function yunikov_v1.notify_unified_realtime()
 returns trigger
 language plpgsql
 security invoker
-as $$
+set search_path = yunikov_v1, pg_catalog
+as $
 declare
   payload json;
   member_row record;
